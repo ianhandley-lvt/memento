@@ -213,6 +213,62 @@ There is intentionally no `--source all` command. Claude imports are
 project-scoped while Cursor imports are global and unscoped, so combining them
 made discovery totals misleading. Run the two explicit commands separately.
 
+### Understand batch-import results
+
+`import-sessions` prints one JSON summary for the run. For example:
+
+```json
+{
+  "discovered": 178,
+  "eligible": 101,
+  "activated": 100,
+  "unchanged": 77,
+  "changed_since_failure": 0,
+  "blocked": 1,
+  "failed": 0,
+  "pending_retry": 0,
+  "indexed": 386,
+  "exact_duplicates": 0,
+  "possible_duplicates": 16
+}
+```
+
+The source-processing fields count sessions or conversations:
+
+| Field | Meaning |
+| --- | --- |
+| `discovered` | Source sessions found after applying the source, project, and `--since` filters. |
+| `eligible` | Discovered sources selected for processing in this run. Normally this excludes sources whose current content hash already has an artifact. With `--resume`, it includes only retryable unchanged revisions. |
+| `activated` | Eligible sources successfully extracted or restored from an existing artifact and made the active revision. This counts sources, not Episode Records. |
+| `unchanged` | Sources skipped because an artifact for the same content already exists, plus any eligible source that resolves to a no-op. |
+| `changed_since_failure` | During `--resume`, failed sources whose content changed since the recorded failure. Memory does not retry these silently; run a normal import to process the new revision. |
+| `blocked` | Sources Memory deliberately refused to extract, such as a sanitized session exceeding the configured size limit. The job status contains an actionable reason. |
+| `failed` | Sources that reached extraction but produced a non-retryable error, such as invalid extractor output after bounded retries. |
+| `pending_retry` | Sources with a transient failure, such as Cursor being unavailable, timing out, or exhausting quota. Retry these later with `--resume`. |
+
+After processing, Memory rebuilds the search index from all active artifacts in
+the configured artifact store. These fields describe that resulting corpus,
+not just the sources processed during this command:
+
+| Field | Meaning |
+| --- | --- |
+| `indexed` | Retrievable Episode Records written to LanceDB after lifecycle and exact-duplicate filtering. It is not a session count and may include records from other previously imported projects and sources. |
+| `exact_duplicates` | Active Episode Records in the corpus identified by identical normalized-content fingerprints and omitted from retrieval. Their artifacts and provenance are retained. |
+| `possible_duplicates` | Active Episode Records with at least one same-project semantic-similarity match. They remain searchable and are flagged for review; this counts flagged records, not necessarily unique pairs. |
+
+In the example, `101 eligible + 77 unchanged = 178 discovered`. Of the 101
+attempted sources, 100 became active and one was blocked. The rebuilt database
+then contained 386 retrievable Episode Records, with 16 records flagged as
+possible semantic duplicates.
+
+A dry run stops before extraction and indexing. It therefore reports discovery
+and eligibility but does not produce new activations or index statistics.
+
+Older versions accepted `memory import-sessions --source all`; output from that
+command combined configured-project Claude sessions with global, unscoped
+Cursor conversations. Use separate Claude and Cursor imports in current
+versions so each summary has one clear scope.
+
 ### Import a curated Markdown knowledge base
 
 ```sh
