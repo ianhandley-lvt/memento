@@ -10,6 +10,26 @@ the Cursor agent and its configured model to turn sanitized conversations into
 structured records. LanceDB and FastEmbed perform storage and retrieval
 locally.
 
+## Table of contents
+
+- [Concept map](#concept-map)
+- [Requirements](#requirements)
+- [1. Install Memory](#1-install-memory)
+- [2. Configure Memory](#2-configure-memory)
+- [3. Put knowledge into Memory](#3-put-knowledge-into-memory)
+  - [Import Claude sessions](#import-claude-sessions)
+  - [Import Cursor conversations](#import-cursor-conversations)
+  - [Understand batch-import results](#understand-batch-import-results)
+  - [Import a curated Markdown knowledge base](#import-a-curated-markdown-knowledge-base)
+  - [Import one transcript manually](#import-one-transcript-manually)
+- [4. Test retrieval](#4-test-retrieval)
+- [5. Connect Memory to Claude Code](#5-connect-memory-to-claude-code)
+- [Everyday command reference](#everyday-command-reference)
+- [How records are treated](#how-records-are-treated)
+- [Improve the knowledge base](#improve-the-knowledge-base)
+- [Troubleshooting](#troubleshooting)
+- [Development](#development)
+
 ## Concept map
 
 ```mermaid
