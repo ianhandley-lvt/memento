@@ -392,6 +392,7 @@ def run(
             sources = [source for source in sources if source.updated_at is None or source.updated_at >= cutoff]
 
         counts = {"discovered": len(sources), "eligible": 0, "activated": 0, "unchanged": 0, "changed_since_failure": 0, "blocked": 0, "failed": 0, "pending_retry": 0}
+        attention_required = []
         candidates = []
         for source in sources:
             hash_value = source_hash(source.path)
@@ -403,6 +404,13 @@ def run(
                 attempted_hash = json.loads(status_file.read_text()).get("attempted_hash")
                 if attempted_hash != hash_value:
                     counts["changed_since_failure"] += 1
+                    attention_required.append({
+                        "source_type": source.source_type,
+                        "source_id": source.source_id,
+                        "status": "changed_since_failure",
+                        "reason": "source content changed since the recorded failed attempt",
+                        "next_action": "run a normal import without --resume to process the new revision",
+                    })
                     continue
             if not args.resume and existing:
                 counts["unchanged"] += 1
@@ -423,11 +431,24 @@ def run(
                     source_type=source.source_type, source_id=source.source_id, source_uri=source.source_uri,
                 )
                 counts[{"no_op": "unchanged"}.get(outcome.status, outcome.status)] += 1
+                if outcome.status in {"blocked", "failed", "pending_retry"}:
+                    next_action = {
+                        "blocked": "resolve the stated reason, then use --resume if the source is unchanged; use a normal import if it changes",
+                        "failed": "correct the extractor or input problem, then use --resume if the source is unchanged",
+                        "pending_retry": "restore Cursor availability or quota, then run the same import with --resume",
+                    }[outcome.status]
+                    attention_required.append({
+                        "source_type": source.source_type,
+                        "source_id": source.source_id,
+                        "status": outcome.status,
+                        "reason": outcome.reason,
+                        "next_action": next_action,
+                    })
             selected_embedder = embedder or FastEmbedder()
             counts["indexed"], counts["exact_duplicates"], counts["possible_duplicates"] = _index_active_records(
                 artifacts, database, selected_embedder
             )
-        print(json.dumps(counts, indent=2))
+        print(json.dumps({**counts, "attention_required": attention_required}, indent=2))
         if cursor_temporary is not None:
             cursor_temporary.cleanup()
     elif args.command == "import-markdown-kb":

@@ -1571,6 +1571,36 @@ def test_import_sessions_project_filter_and_resume_are_safe(tmp_path, capsys, mo
     assert json.loads(capsys.readouterr().out)["eligible"] == 0
 
 
+def test_import_sessions_reports_blocked_source_reason_and_next_action(tmp_path, capsys, monkeypatch):
+    artifacts = tmp_path / "artifacts"
+    project = tmp_path / "lvcore"
+    transcript_dir = tmp_path / ".claude" / "projects" / re.sub(r"[^A-Za-z0-9_-]", "-", str(project.resolve()))
+    project.mkdir()
+    transcript_dir.mkdir(parents=True)
+    (transcript_dir / "blocked-session.jsonl").write_text('{"type":"user","message":{"content":"large"}}\n')
+    config = tmp_path / "config.toml"
+    config.write_text(
+        f'operator_id = "ian"\nartifacts = "{artifacts}"\ndatabase = "{tmp_path / "database"}"\n'
+        f'[projects.lvcore]\nroot = "{project}"\n'
+    )
+    monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(tmp_path / ".claude"))
+    blocked = FakeExtractor(error=ExtractionBlocked("sanitized session exceeds 500000 characters"), project_id="lvcore")
+
+    assert run([
+        "--config", str(config), "import-sessions", "--source", "claude", "--project", "lvcore"
+    ], KeywordEmbedder(), blocked) == 0
+
+    output = json.loads(capsys.readouterr().out)
+    assert output["blocked"] == 1
+    assert output["attention_required"] == [{
+        "source_type": "claude_session",
+        "source_id": "blocked-session",
+        "status": "blocked",
+        "reason": "sanitized session exceeds 500000 characters",
+        "next_action": "resolve the stated reason, then use --resume if the source is unchanged; use a normal import if it changes",
+    }]
+
+
 def test_import_sessions_cursor_uses_only_local_rows_and_keeps_them_unscoped(tmp_path, capsys):
     artifacts = tmp_path / "artifacts"
     database = tmp_path / "memory.lance"

@@ -20,6 +20,7 @@ locally.
   - [Import Claude sessions](#import-claude-sessions)
   - [Import Cursor conversations](#import-cursor-conversations)
   - [Understand batch-import results](#understand-batch-import-results)
+  - [Recover blocked sessions](#recover-blocked-sessions)
   - [Import a curated Markdown knowledge base](#import-a-curated-markdown-knowledge-base)
   - [Import one transcript manually](#import-one-transcript-manually)
 - [4. Test retrieval](#4-test-retrieval)
@@ -249,7 +250,16 @@ made discovery totals misleading. Run the two explicit commands separately.
   "pending_retry": 0,
   "indexed": 386,
   "exact_duplicates": 0,
-  "possible_duplicates": 16
+  "possible_duplicates": 16,
+  "attention_required": [
+    {
+      "source_type": "claude_session",
+      "source_id": "example-session-id",
+      "status": "blocked",
+      "reason": "Sanitized session exceeds the configured character limit",
+      "next_action": "resolve the stated reason, then use --resume if the source is unchanged; use a normal import if it changes"
+    }
+  ]
 }
 ```
 
@@ -276,6 +286,11 @@ not just the sources processed during this command:
 | `exact_duplicates` | Active Episode Records in the corpus identified by identical normalized-content fingerprints and omitted from retrieval. Their artifacts and provenance are retained. |
 | `possible_duplicates` | Active Episode Records with at least one same-project semantic-similarity match. They remain searchable and are flagged for review; this counts flagged records, not necessarily unique pairs. |
 
+`attention_required` identifies every source that needs intervention. Each item
+includes its source type, source ID, status, original failure reason, and a
+recommended next action. An empty list means the run left no source requiring
+attention.
+
 In the example, `101 eligible + 77 unchanged = 178 discovered`. Of the 101
 attempted sources, 100 became active and one was blocked. The rebuilt database
 then contained 386 retrievable Episode Records, with 16 records flagged as
@@ -288,6 +303,43 @@ Older versions accepted `memory import-sessions --source all`; output from that
 command combined configured-project Claude sessions with global, unscoped
 Cursor conversations. Use separate Claude and Cursor imports in current
 versions so each summary has one clear scope.
+
+### Recover blocked sessions
+
+A blocked source was deliberately left out; it is not a partial success. Memory
+writes no partial artifact or new index rows for that revision, and a previously
+active revision remains searchable. Start with the matching
+`attention_required` item in the import output—it names the source and preserves
+the exact reason.
+
+For a session exceeding `extractor.max_sanitized_chars`:
+
+1. Decide whether the source is worth the additional extraction context and
+   Cursor quota. Do not raise the limit automatically.
+2. Increase `extractor.max_sanitized_chars` in
+   `~/.config/memory/config.toml` enough to accommodate that sanitized session.
+3. Retry the unchanged blocked revision:
+
+   ```sh
+   memory import-sessions --source claude --project current --resume
+   ```
+
+4. Confirm that the new summary reports the source under `activated`, with no
+   corresponding `attention_required` item.
+
+If you edit or regenerate the source after it was blocked, `--resume` reports
+`changed_since_failure` and intentionally does not process it. Run a normal
+import without `--resume` to treat that content as a new revision:
+
+```sh
+memory import-sessions --source claude --project current
+```
+
+For `pending_retry`, restore Cursor authentication, availability, or quota and
+then use `--resume`. For `failed`, correct the extractor or malformed input
+problem named in the report before retrying. If you intentionally leave a
+source blocked, no further action is required; subsequent normal imports will
+continue to report it until it succeeds or the source is removed.
 
 ### Import a curated Markdown knowledge base
 
