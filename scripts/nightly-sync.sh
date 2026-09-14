@@ -16,6 +16,14 @@
 
 set -u
 
+# launchd runs jobs with a minimal environment — it does not inherit the
+# interactive shell's PATH. memento itself is invoked by absolute path below,
+# but memento in turn shells out to `cursor-agent` by bare name, which needs
+# this on PATH to resolve under launchd (confirmed failing 2026-09-14:
+# FileNotFoundError: 'cursor-agent' even when triggered via `launchctl start`
+# from an interactive terminal — launchd's env applies regardless of trigger).
+export PATH="$HOME/.local/bin:$PATH"
+
 MEMENTO="$HOME/.local/bin/memento"
 LOG_DIR="$HOME/.local/share/memento/logs"
 LOG_FILE="$LOG_DIR/nightly-sync-$(date +%Y-%m-%d).log"
