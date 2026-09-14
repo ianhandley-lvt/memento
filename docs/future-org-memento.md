@@ -1,11 +1,11 @@
-# Future goal: organization-wide Memory
+# Future goal: organization-wide Memento
 
 Status: exploratory future direction. This document records a possible
 destination; it does not expand the current local-first implementation scope.
 
 ## Goal
 
-Evolve Memory from a personal, local RAG into a permission-aware organizational
+Evolve Memento from a personal, local RAG into a permission-aware organizational
 memory service. Authorized users and AI agents should be able to retrieve
 relevant knowledge learned across the organization instead of relying only on
 records stored on one developer's computer.
@@ -44,19 +44,19 @@ those operations are model training.
 ## Target shape
 
 Developers should not connect directly to a shared database. They should use an
-authenticated Memory service:
+authenticated Memento service:
 
 ```text
 Local or managed source
     -> sanitize and structure
-    -> authenticated Memory API
+    -> authenticated Memento API
     -> immutable shared artifacts
     -> metadata and lifecycle state
     -> hybrid search index
 
 Claude hook
     -> user identity + trusted project scope
-    -> Memory API
+    -> Memento API
     -> permission filtering
     -> hybrid retrieval and ranking
     -> cited evidence
@@ -81,7 +81,7 @@ measured rather than starting with a database choice.
 
 ## Retrieval scopes
 
-Organization-wide Memory must not mean that every user can search every record.
+Organization-wide Memento must not mean that every user can search every record.
 Likely scopes include:
 
 - **Personal:** private knowledge available only to its owner
@@ -157,7 +157,7 @@ works technically. A team pilot should begin only when:
 - Giving developer machines direct write access to shared storage
 - Creating one universally searchable bucket without authorization boundaries
 - Automatically treating model-extracted content as verified truth
-- Replacing authoritative source systems with Memory
+- Replacing authoritative source systems with Memento
 
 ## Open questions
 

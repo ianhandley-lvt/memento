@@ -3,9 +3,9 @@ import subprocess
 from pathlib import Path
 
 import pytest
-from session_rag.extractors.cursor import CursorExtractor
-from session_rag.health import CursorHealthChecker
-from session_rag.extractors.base import ExtractionBlocked, ExtractionError, ExtractionPendingRetry, ProjectProvenance
+from memento.extractors.cursor import CursorExtractor
+from memento.health import CursorHealthChecker
+from memento.extractors.base import ExtractionBlocked, ExtractionError, ExtractionPendingRetry, ProjectProvenance
 
 
 @pytest.fixture(autouse=True)

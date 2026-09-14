@@ -2,7 +2,7 @@
 
 **Status:** Implemented
 
-Memory can import a curated Markdown Wiki without sending it through Cursor. This path is intended for knowledge bases that already contain synthesized articles, meaningful headings, dates, and citations to original material.
+Memento can import a curated Markdown Wiki without sending it through Cursor. This path is intended for knowledge bases that already contain synthesized articles, meaningful headings, dates, and citations to original material.
 
 ## Source contract
 

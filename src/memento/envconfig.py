@@ -3,14 +3,22 @@ from __future__ import annotations
 import os
 from dataclasses import fields
 
-ENV_PREFIX = "MEMORY_"
-LEGACY_ENV_PREFIX = "SESSION_RAG_"
+ENV_PREFIX = "MEMENTO_"
+LEGACY_ENV_PREFIXES = ("MEMORY_", "SESSION_RAG_")
 
 
 def env_value(name: str, default: str | None = None) -> str | None:
-    """Read canonical MEMORY_* configuration with SESSION_RAG_* fallback."""
+    """Read canonical MEMENTO_* configuration, falling back through each
+    prior name's prefix (MEMORY_*, then SESSION_RAG_*) in order."""
 
-    return os.getenv(ENV_PREFIX + name, os.getenv(LEGACY_ENV_PREFIX + name, default))
+    value = os.getenv(ENV_PREFIX + name)
+    if value is not None:
+        return value
+    for legacy_prefix in LEGACY_ENV_PREFIXES:
+        value = os.getenv(legacy_prefix + name)
+        if value is not None:
+            return value
+    return default
 
 
 def config_from_env(cls):

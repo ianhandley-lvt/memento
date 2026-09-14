@@ -149,7 +149,7 @@ def _document_metadata(markdown: str) -> tuple[str | None, list[str]]:
 
 
 def _configured(value: str | None, env_name: str) -> str:
-    resolved = value or env_value(env_name.removeprefix("SESSION_RAG_"), "")
+    resolved = value or env_value(env_name.removeprefix("MEMENTO_"), "")
     if not resolved:
         raise ValueError(f"{env_name} must be configured")
     return resolved
@@ -177,7 +177,7 @@ class MarkdownKnowledgeBaseExtractor:
     ) -> None:
         self.knowledge_base_id = knowledge_base_id
         self.project_id = project_id
-        self.operator_id = _configured(operator_id, "SESSION_RAG_OPERATOR_ID")
+        self.operator_id = _configured(operator_id, "MEMENTO_OPERATOR_ID")
         self.project = ProjectProvenance(project_id=project_id, project_root=project_root)
         self.temporal_scope = temporal_scope
 

@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 
-from session_rag.sanitize import SanitizationBudgetExceeded, redact_secrets, sanitize_session
+from memento.sanitize import SanitizationBudgetExceeded, redact_secrets, sanitize_session
 
 
 @pytest.mark.parametrize(

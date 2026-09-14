@@ -1,5 +1,5 @@
 [project]
-name = "memory"
+name = "memento"
 version = "0.1.0"
 description = "Local evidence memory for AI work sessions and curated knowledge"
 requires-python = ">=3.12,<3.14"
@@ -9,8 +9,7 @@ dependencies = [
 ]
 
 [project.scripts]
-memory = "session_rag.cli:main"
-session-rag = "session_rag.cli:main"
+memento = "memento.cli:main"
 
 [dependency-groups]
 dev = [
@@ -26,4 +25,4 @@ pythonpath = ["src"]
 testpaths = ["tests"]
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/session_rag"]
+packages = ["src/memento"]

@@ -1,6 +1,6 @@
 # Configuration
 
-Memory reads `~/.config/memory/config.toml` by default. Set
+Memento reads `~/.config/memory/config.toml` by default. Set
 `MEMORY_CONFIG` or pass the global `--config PATH` option to select a
 different file.
 
@@ -47,7 +47,7 @@ memory config add-project ~/src/work/schedule-management-service --id schedule-s
 Registration is idempotent for the same ID and root. Conflicting IDs or roots
 are rejected rather than silently changing existing provenance.
 
-When the current directory is inside a configured project root, Memory
+When the current directory is inside a configured project root, Memento
 selects the most specific matching project. Prompt text can never select or
 widen this Retrieval Scope.
 
@@ -97,7 +97,7 @@ sources are reported as `changed_since_failure` and require a fresh normal
 import. Cursor is read through a temporary, read-only database snapshot.
 Because its project fingerprint is opaque, Cursor conversations are imported
 without project provenance and require `--global-scope` during retrieval.
-Memory intentionally does not combine Claude and Cursor discovery under a
+Memento intentionally does not combine Claude and Cursor discovery under a
 `--source all` option because their scope and provenance rules differ.
 
 Each index rebuild automatically skips exact normalized duplicates inside the

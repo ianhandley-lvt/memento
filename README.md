@@ -1,11 +1,11 @@
-# Memory
+# Memento
 
-Memory is a local, evidence-backed knowledge system for AI-assisted work. It
+Memento is a local, evidence-backed knowledge system for AI-assisted work. It
 turns Claude Code sessions, Cursor conversations, and curated Markdown into
 structured Episode Records, stores immutable source-linked artifacts, builds a
 hybrid search index, and gives relevant evidence to Claude before it responds.
 
-Everything stays on your computer except extraction: by default, Memory asks
+Everything stays on your computer except extraction: by default, Memento asks
 the Cursor agent and its configured model to turn sanitized conversations into
 structured records. LanceDB and FastEmbed perform storage and retrieval
 locally.
@@ -14,9 +14,9 @@ locally.
 
 - [Concept map](#concept-map)
 - [Requirements](#requirements)
-- [1. Install Memory](#1-install-memory)
-- [2. Configure Memory](#2-configure-memory)
-- [3. Put knowledge into Memory](#3-put-knowledge-into-memory)
+- [1. Install Memento](#1-install-memory)
+- [2. Configure Memento](#2-configure-memory)
+- [3. Put knowledge into Memento](#3-put-knowledge-into-memory)
   - [Import Claude sessions](#import-claude-sessions)
   - [Import Cursor conversations](#import-cursor-conversations)
   - [Understand batch-import results](#understand-batch-import-results)
@@ -24,7 +24,7 @@ locally.
   - [Import a curated Markdown knowledge base](#import-a-curated-markdown-knowledge-base)
   - [Import one transcript manually](#import-one-transcript-manually)
 - [4. Test retrieval](#4-test-retrieval)
-- [5. Connect Memory to Claude Code](#5-connect-memory-to-claude-code)
+- [5. Connect Memento to Claude Code](#5-connect-memory-to-claude-code)
 - [Everyday command reference](#everyday-command-reference)
 - [How records are treated](#how-records-are-treated)
 - [Improve the knowledge base](#improve-the-knowledge-base)
@@ -71,13 +71,13 @@ cursor-agent --help
 claude --version
 ```
 
-## 1. Install Memory
+## 1. Install Memento
 
 Clone the repository, enter it, and install the command as an editable uv tool:
 
 ```sh
-git clone https://github.com/ianhandley-lvt/session-rag.git
-cd session-rag
+git clone https://github.com/ianhandley-lvt/memento.git
+cd memento
 uv tool install --editable .
 ```
 
@@ -99,10 +99,7 @@ Then approve it once:
 ```sh
 direnv allow
 ```
-
-The former `session-rag` command remains an alias for compatibility.
-
-## 2. Configure Memory
+## 2. Configure Memento
 
 Create `~/.config/memory/config.toml`:
 
@@ -153,7 +150,7 @@ mkdir -p ~/.local/share/memory/artifacts ~/.local/share/memory/lancedb
 memory config show
 ```
 
-`config show` lists every registered project. To see which project Memory
+`config show` lists every registered project. To see which project Memento
 resolves from the directory you are currently in, run:
 
 ```sh
@@ -164,7 +161,7 @@ Configuration precedence is command option, `MEMORY_*` environment variable,
 TOML value, then built-in default. `SESSION_RAG_*` variables and the old config
 path remain fallback compatibility mechanisms.
 
-## 3. Put knowledge into Memory
+## 3. Put knowledge into Memento
 
 ### Preview first
 
@@ -205,7 +202,7 @@ To retry recorded extraction failures without retrying everything:
 memory import-sessions --source claude --project my-project --resume
 ```
 
-If a failed transcript changed afterward, Memory reports
+If a failed transcript changed afterward, Memento reports
 `changed_since_failure` instead of silently retrying different content. Run a
 normal import to treat the changed file as a new revision.
 
@@ -225,7 +222,7 @@ memory import-sessions --source cursor --dry-run
 memory import-sessions --source cursor
 ```
 
-Memory reads a temporary, read-only snapshot of Cursor's local conversation
+Memento reads a temporary, read-only snapshot of Cursor's local conversation
 search database and ignores duplicate cloud-cache rows. Cursor does not expose
 a trustworthy project path there, so these records are deliberately unscoped.
 They appear only in searches that explicitly use `--global-scope`.
@@ -271,12 +268,12 @@ The source-processing fields count sessions or conversations:
 | `eligible` | Discovered sources selected for processing in this run. Normally this excludes sources whose current content hash already has an artifact. With `--resume`, it includes only retryable unchanged revisions. |
 | `activated` | Eligible sources successfully extracted or restored from an existing artifact and made the active revision. This counts sources, not Episode Records. |
 | `unchanged` | Sources skipped because an artifact for the same content already exists, plus any eligible source that resolves to a no-op. |
-| `changed_since_failure` | During `--resume`, failed sources whose content changed since the recorded failure. Memory does not retry these silently; run a normal import to process the new revision. |
-| `blocked` | Sources Memory deliberately refused to extract, such as a sanitized session exceeding the configured size limit. The job status contains an actionable reason. |
+| `changed_since_failure` | During `--resume`, failed sources whose content changed since the recorded failure. Memento does not retry these silently; run a normal import to process the new revision. |
+| `blocked` | Sources Memento deliberately refused to extract, such as a sanitized session exceeding the configured size limit. The job status contains an actionable reason. |
 | `failed` | Sources that reached extraction but produced a non-retryable error, such as invalid extractor output after bounded retries. |
 | `pending_retry` | Sources with a transient failure, such as Cursor being unavailable, timing out, or exhausting quota. Retry these later with `--resume`. |
 
-After processing, Memory rebuilds the search index from all active artifacts in
+After processing, Memento rebuilds the search index from all active artifacts in
 the configured artifact store. These fields describe that resulting corpus,
 not just the sources processed during this command:
 
@@ -306,7 +303,7 @@ versions so each summary has one clear scope.
 
 ### Recover blocked sessions
 
-A blocked source was deliberately left out; it is not a partial success. Memory
+A blocked source was deliberately left out; it is not a partial success. Memento
 writes no partial artifact or new index rows for that revision, and a previously
 active revision remains searchable. Start with the matching
 `attention_required` item in the import output—it names the source and preserves
@@ -381,11 +378,11 @@ Global search, including unscoped Cursor records:
 memory search "How did we fix the deployment?" --global-scope
 ```
 
-A weak match returns `No relevant session memory found.` Memory combines
+A weak match returns `No relevant session memory found.` Memento combines
 semantic similarity with exact-text retrieval, then applies verification,
 temporal, relevance, and project-scope rules.
 
-## 5. Connect Memory to Claude Code
+## 5. Connect Memento to Claude Code
 
 The repository includes the fail-open hook wrapper at
 `scripts/claude-user-prompt-submit`. Make it executable:
@@ -513,12 +510,12 @@ current` from inside the project to confirm that it resolves correctly.
 **Extraction is blocked because the session is too large**
 
 Raise `extractor.max_sanitized_chars` deliberately, or start with newer/smaller
-sessions using `--since`. Memory refuses silent truncation.
+sessions using `--since`. Memento refuses silent truncation.
 
 **Cursor is unavailable, times out, or runs out of quota**
 
 The session is marked `pending_retry`; authenticate or wait for quota, then use
-`--resume`. Memory does not fall back to raw turn indexing or another provider.
+`--resume`. Memento does not fall back to raw turn indexing or another provider.
 
 **Search finds nothing after a manual extraction**
 

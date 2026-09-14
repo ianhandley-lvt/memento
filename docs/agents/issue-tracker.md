@@ -1,6 +1,6 @@
 # Issue tracker: GitHub
 
-Issues and PRDs for this repo live as GitHub issues, in `ianhandley-lvt/session-rag`. Use the `gh` CLI for all operations.
+Issues and PRDs for this repo live as GitHub issues, in `ianhandley-lvt/memento`. Use the `gh` CLI for all operations.
 
 ## Conventions
 

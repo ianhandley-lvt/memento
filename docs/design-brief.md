@@ -1,6 +1,6 @@
 # Session RAG: Design Brief
 
-**Status:** HISTORICAL. This was the seed document for the initial design ("grill-with-docs") session, written before any v1 code existed. It's preserved for the original framing and trade-offs, not as a description of the current system — its "Current implementation status" and "Open design questions" sections below reflect that starting point and are now superseded. For current behavior, see [`CONTEXT.md`](../CONTEXT.md) (canonical vocabulary), the [ADRs](adr/) (decision rationale), [`rag-design-decisions.md`](rag-design-decisions.md) (the consolidated, implemented v1 design), and closed [issue #1](https://github.com/ianhandley-lvt/session-rag/issues/1) (final acceptance criteria and history).<br>
+**Status:** HISTORICAL. This was the seed document for the initial design ("grill-with-docs") session, written before any v1 code existed. It's preserved for the original framing and trade-offs, not as a description of the current system — its "Current implementation status" and "Open design questions" sections below reflect that starting point and are now superseded. For current behavior, see [`CONTEXT.md`](../CONTEXT.md) (canonical vocabulary), the [ADRs](adr/) (decision rationale), [`rag-design-decisions.md`](rag-design-decisions.md) (the consolidated, implemented v1 design), and closed [issue #1](https://github.com/ianhandley-lvt/memento/issues/1) (final acceptance criteria and history).<br>
 **Purpose:** Seed document for a `grill-with-docs` session<br>
 **Last updated:** 2026-09-01
 

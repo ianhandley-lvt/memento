@@ -6,19 +6,19 @@ from pathlib import Path
 
 import pytest
 
-from session_rag.artifacts import artifact_path, find_record, job_status_path, load_active_episode_records, read_active_hash
-from session_rag.app_config import load_app_config
-from session_rag.cli import run
-from session_rag.extractors.base import (
+from memento.artifacts import artifact_path, find_record, job_status_path, load_active_episode_records, read_active_hash
+from memento.app_config import load_app_config
+from memento.cli import run
+from memento.extractors.base import (
     EvidenceLocation,
     ExtractionBlocked,
     ExtractionError,
     ExtractionPendingRetry,
     ProjectProvenance,
 )
-from session_rag.hook import HookConfig, _INTRO, _estimate_tokens, _format_record, handle_user_prompt
-from session_rag.retrieval import RetrievalScope, search
-from session_rag.overlay import read_state
+from memento.hook import HookConfig, _INTRO, _estimate_tokens, _format_record, handle_user_prompt
+from memento.retrieval import RetrievalScope, search
+from memento.overlay import read_state
 
 from conftest import make_record
 
@@ -181,7 +181,7 @@ def test_cli_config_add_project_defaults_to_current_git_root(tmp_path, capsys, m
     assert output["status"] == "added"
     assert output["project_id"] == "schedule-management-service"
     assert output["root"] == str(project.resolve())
-    config = load_app_config(xdg_home / "memory" / "config.toml")
+    config = load_app_config(xdg_home / "memento" / "config.toml")
     assert config.projects["schedule-management-service"].root == project.resolve()
 
 
@@ -928,7 +928,7 @@ def test_hook_timeout_bounds_embedder_construction_not_just_search(tmp_path):
 def test_hook_timeout_bounds_formatting_not_just_construction_and_search(tmp_path, monkeypatch):
     import time
 
-    import session_rag.hook as hook_module
+    import memento.hook as hook_module
 
     transcript = tmp_path / "session-123.jsonl"
     artifacts_dir = tmp_path / "artifacts"
@@ -971,7 +971,7 @@ def test_hook_timeout_bounds_formatting_not_just_construction_and_search(tmp_pat
 def test_hook_slow_metrics_writer_does_not_delay_the_hook_past_the_retrieval_deadline(tmp_path, monkeypatch):
     import time
 
-    import session_rag.hook as hook_module
+    import memento.hook as hook_module
 
     transcript = tmp_path / "session-123.jsonl"
     artifacts_dir = tmp_path / "artifacts"
@@ -1011,7 +1011,7 @@ def test_hook_slow_metrics_writer_does_not_delay_the_hook_past_the_retrieval_dea
 
 
 def test_hook_metric_writer_exception_does_not_escape_or_change_response(tmp_path, monkeypatch):
-    import session_rag.hook as hook_module
+    import memento.hook as hook_module
 
     transcript = tmp_path / "session-123.jsonl"
     artifacts_dir = tmp_path / "artifacts"
@@ -1041,7 +1041,7 @@ def test_hook_metric_writer_exception_does_not_escape_or_change_response(tmp_pat
 def test_hook_fails_open_within_retrieval_timeout_even_when_metrics_writer_is_also_slow(tmp_path, monkeypatch):
     import time
 
-    import session_rag.hook as hook_module
+    import memento.hook as hook_module
 
     transcript = tmp_path / "session-123.jsonl"
     artifacts_dir = tmp_path / "artifacts"

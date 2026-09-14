@@ -9,7 +9,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Mapping
 
-from .envconfig import ENV_PREFIX, LEGACY_ENV_PREFIX
+from .envconfig import ENV_PREFIX, LEGACY_ENV_PREFIXES
 
 
 class ConfigError(ValueError):
@@ -60,19 +60,21 @@ class ResolvedAppConfig:
 
 def default_config_path(environ: Mapping[str, str] | None = None) -> Path:
     env = environ if environ is not None else os.environ
-    configured = env.get("MEMORY_CONFIG") or env.get("SESSION_RAG_CONFIG")
+    configured = env.get("MEMENTO_CONFIG") or env.get("MEMORY_CONFIG") or env.get("SESSION_RAG_CONFIG")
     if configured:
         return Path(configured).expanduser()
     xdg_home = env.get("XDG_CONFIG_HOME")
     base = Path(xdg_home).expanduser() if xdg_home else Path.home() / ".config"
-    return base / "memory" / "config.toml"
+    return base / "memento" / "config.toml"
 
 
-def _legacy_config_path(environ: Mapping[str, str] | None = None) -> Path:
+def _legacy_config_paths(environ: Mapping[str, str] | None = None) -> list[Path]:
+    """Older config locations, checked in order, oldest last."""
+
     env = environ if environ is not None else os.environ
     xdg_home = env.get("XDG_CONFIG_HOME")
     base = Path(xdg_home).expanduser() if xdg_home else Path.home() / ".config"
-    return base / "session-rag" / "config.toml"
+    return [base / "memory" / "config.toml", base / "session-rag" / "config.toml"]
 
 
 def _optional_path(value: object, *, field_name: str) -> Path | None:
@@ -103,11 +105,12 @@ def load_app_config(path: Path | None = None, *, environ: Mapping[str, str] | No
     explicit_path = path is not None
     selected_path = path.expanduser() if path is not None else default_config_path(environ)
     env = environ if environ is not None else os.environ
-    has_explicit_env_path = bool(env.get("MEMORY_CONFIG") or env.get("SESSION_RAG_CONFIG"))
+    has_explicit_env_path = bool(env.get("MEMENTO_CONFIG") or env.get("MEMORY_CONFIG") or env.get("SESSION_RAG_CONFIG"))
     if not explicit_path and not has_explicit_env_path and not selected_path.exists():
-        legacy_path = _legacy_config_path(environ)
-        if legacy_path.exists():
-            selected_path = legacy_path
+        for legacy_path in _legacy_config_paths(environ):
+            if legacy_path.exists():
+                selected_path = legacy_path
+                break
     if not selected_path.exists():
         if explicit_path:
             raise ConfigError(f"config file does not exist: {selected_path}")
@@ -218,7 +221,14 @@ def _first(*values):
 
 
 def _env(env: Mapping[str, str], suffix: str) -> str | None:
-    return env.get(ENV_PREFIX + suffix) or env.get(LEGACY_ENV_PREFIX + suffix)
+    value = env.get(ENV_PREFIX + suffix)
+    if value is not None:
+        return value
+    for legacy_prefix in LEGACY_ENV_PREFIXES:
+        value = env.get(legacy_prefix + suffix)
+        if value is not None:
+            return value
+    return None
 
 
 def _resolved_path(value: object) -> Path | None:

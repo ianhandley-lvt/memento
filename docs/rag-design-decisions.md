@@ -1,6 +1,6 @@
-# Memory v1 Design Decisions
+# Memento v1 Design Decisions
 
-**Status:** Implemented. v1 acceptance criteria are complete — see closed [issue #1](https://github.com/ianhandley-lvt/session-rag/issues/1) and merged PR #19.<br>
+**Status:** Implemented. v1 acceptance criteria are complete — see closed [issue #1](https://github.com/ianhandley-lvt/memento/issues/1) and merged PR #19.<br>
 **Decided:** 2026-09-01 · **Implemented:** 2026-09-02<br>
 **Scope:** Local Claude Code session and curated Markdown knowledge for one operator on one Mac
 
@@ -8,7 +8,7 @@ This is the readable, consolidated statement of the agreed v1 design. For the or
 
 ## Purpose
 
-Memory turns useful knowledge created during Claude Code sessions into durable, structured evidence that can be retrieved during later work. It is intended to recover decisions, explanations, resolved problems, and current-system observations without treating an entire raw conversation as trustworthy memory.
+Memento turns useful knowledge created during Claude Code sessions into durable, structured evidence that can be retrieved during later work. It is intended to recover decisions, explanations, resolved problems, and current-system observations without treating an entire raw conversation as trustworthy memory.
 
 The v1 pipeline will:
 
@@ -368,7 +368,7 @@ Extraction, retrieval, and end-to-end fixtures remain separate so extractor vari
 
 The project uses two primary behavioral seams.
 
-### `session_rag.cli.run()`
+### `memento.cli.run()`
 
 This is the black-box seam for the local pipeline. Tests use real temporary artifact storage, filesystem behavior, and LanceDB with controlled injected dependencies:
 

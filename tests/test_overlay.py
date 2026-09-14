@@ -1,7 +1,7 @@
 import pytest
 
-from session_rag.artifacts import read_artifact, write_artifact
-from session_rag.overlay import (
+from memento.artifacts import read_artifact, write_artifact
+from memento.overlay import (
     InvalidTransition,
     SupersedeRequiresReplacement,
     UnknownReplacementRecord,

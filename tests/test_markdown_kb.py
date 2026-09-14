@@ -1,9 +1,9 @@
 import json
 from pathlib import Path
 
-from session_rag.artifacts import artifact_path, read_active_hash
-from session_rag.cli import run
-from session_rag.markdown_kb import markdown_source_id
+from memento.artifacts import artifact_path, read_active_hash
+from memento.cli import run
+from memento.markdown_kb import markdown_source_id
 
 
 class KeywordEmbedder:

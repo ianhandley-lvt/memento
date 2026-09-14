@@ -2,12 +2,12 @@
 
 set -u
 
-memory_command=$(command -v memory 2>/dev/null || true)
-if [ -z "$memory_command" ] && [ -x "$HOME/.local/bin/memory" ]; then
-  memory_command="$HOME/.local/bin/memory"
+memento_command=$(command -v memento 2>/dev/null || true)
+if [ -z "$memento_command" ] && [ -x "$HOME/.local/bin/memento" ]; then
+  memento_command="$HOME/.local/bin/memento"
 fi
 
-if [ -z "$memory_command" ] || ! "$memory_command" hook "$@"
+if [ -z "$memento_command" ] || ! "$memento_command" hook "$@"
 then
   printf '{}\n'
 fi

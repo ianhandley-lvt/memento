@@ -68,8 +68,8 @@ def _scope_from_args(args: argparse.Namespace, resolved: ResolvedAppConfig) -> R
 
 
 def parser() -> argparse.ArgumentParser:
-    result = argparse.ArgumentParser(prog="memory")
-    result.add_argument("--config", type=Path, help="TOML config path (default: ~/.config/memory/config.toml)")
+    result = argparse.ArgumentParser(prog="memento")
+    result.add_argument("--config", type=Path, help="TOML config path (default: ~/.config/memento/config.toml)")
     commands = result.add_subparsers(dest="command", required=True)
     ingest = commands.add_parser("ingest")
     _add_storage_args(ingest)

@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from session_rag.app_config import ConfigError, add_project, load_app_config, resolve_app_config
+from memento.app_config import ConfigError, add_project, load_app_config, resolve_app_config
 
 
 def write_config(path: Path) -> None:
@@ -42,7 +42,7 @@ def test_loads_default_config_from_xdg_config_home(tmp_path, monkeypatch):
     assert config.projects["lvcore"].root == Path("/work/lvcore")
 
 
-def test_memory_environment_overrides_legacy_session_rag_environment(tmp_path):
+def test_memory_environment_overrides_legacy_memento_environment(tmp_path):
     config_path = tmp_path / "config.toml"
     write_config(config_path)
     config = load_app_config(config_path)

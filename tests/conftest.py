@@ -1,6 +1,6 @@
 import pytest
 
-from session_rag.extractors.base import StructuredRecord
+from memento.extractors.base import StructuredRecord
 
 
 @pytest.fixture(autouse=True)

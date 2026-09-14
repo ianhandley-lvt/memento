@@ -33,7 +33,7 @@ DEFAULT_MAX_OUTPUT_RETRIES = 1
 
 
 def _configured(value: str | None, env_var: str, default: str) -> str:
-    suffix = env_var.removeprefix("SESSION_RAG_")
+    suffix = env_var.removeprefix("MEMENTO_")
     return value if value is not None else env_value(suffix, default)
 
 
@@ -101,19 +101,19 @@ class CursorExtractor:
         self._executable = executable
         self._runner = runner
         self._workspace = workspace or Path(tempfile.gettempdir())
-        self._mode = _configured(mode, "SESSION_RAG_CURSOR_MODE", "ask")
+        self._mode = _configured(mode, "MEMENTO_CURSOR_MODE", "ask")
         if self._mode not in {"ask", "plan"}:
             raise ValueError("Cursor mode must be 'ask' or 'plan'")
-        self._model = _configured(model, "SESSION_RAG_CURSOR_MODEL", "auto")
+        self._model = _configured(model, "MEMENTO_CURSOR_MODEL", "auto")
         if sensitive_paths is not None:
             self._sensitive_paths = sensitive_paths
         else:
-            configured_paths = _configured(None, "SESSION_RAG_SENSITIVE_PATHS", "")
+            configured_paths = _configured(None, "MEMENTO_SENSITIVE_PATHS", "")
             self._sensitive_paths = tuple(p for p in configured_paths.split(":") if p)
         self._max_sanitized_chars = max_sanitized_chars or int(
-            _configured(None, "SESSION_RAG_MAX_SANITIZED_CHARS", str(DEFAULT_MAX_SANITIZED_CHARS))
+            _configured(None, "MEMENTO_MAX_SANITIZED_CHARS", str(DEFAULT_MAX_SANITIZED_CHARS))
         )
-        self._operator_id = _configured(operator_id, "SESSION_RAG_OPERATOR_ID", "")
+        self._operator_id = _configured(operator_id, "MEMENTO_OPERATOR_ID", "")
         if not self._operator_id:
             raise ValueError(
                 "operator_id must be configured explicitly (constructor arg or "
@@ -121,10 +121,10 @@ class CursorExtractor:
             )
         self._project = project if project is not None else _project_from_environment()
         self._prompt_version = prompt_version or int(
-            _configured(None, "SESSION_RAG_PROMPT_VERSION", str(DEFAULT_PROMPT_VERSION))
+            _configured(None, "MEMENTO_PROMPT_VERSION", str(DEFAULT_PROMPT_VERSION))
         )
         self._max_output_retries = max_output_retries or int(
-            _configured(None, "SESSION_RAG_MAX_OUTPUT_RETRIES", str(DEFAULT_MAX_OUTPUT_RETRIES))
+            _configured(None, "MEMENTO_MAX_OUTPUT_RETRIES", str(DEFAULT_MAX_OUTPUT_RETRIES))
         )
         self._source_type = source_type
         self._source_id = source_id

@@ -1,10 +1,10 @@
 from datetime import datetime, timedelta, timezone
 
-from session_rag.artifacts import read_artifact, set_active_hash, write_artifact
-from session_rag.hook import handle_user_prompt
-from session_rag.overlay import reject, supersede, verify
-from session_rag.retrieval import RetrievalConfig, RetrievalScope, search
-from session_rag.store import index_episode_records
+from memento.artifacts import read_artifact, set_active_hash, write_artifact
+from memento.hook import handle_user_prompt
+from memento.overlay import reject, supersede, verify
+from memento.retrieval import RetrievalConfig, RetrievalScope, search
+from memento.store import index_episode_records
 
 from conftest import make_record
 

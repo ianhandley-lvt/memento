@@ -1,8 +1,10 @@
-# Memory rename and session batch ingestion
+# Memento rename and session batch ingestion
 
-Memory is the public product name and canonical command. The Python package
-remains `session_rag` internally, while the old command, configuration path,
-and environment prefix remain compatibility aliases.
+Memento is the public product name and canonical command; the Python package
+is `memento` throughout. `memory` and `session-rag` were both prior names —
+their config paths and `MEMORY_CONFIG`/`SESSION_RAG_CONFIG` environment
+variables remain as legacy fallbacks, but neither is an installable command
+alias anymore.
 
 The `import-sessions` command discovers Claude transcripts from an explicitly
 selected registered project (`--project ID` or `--project current`) or every

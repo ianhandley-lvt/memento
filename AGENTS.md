@@ -2,7 +2,7 @@
 
 ### Issue tracker
 
-Issues tracked as GitHub Issues in `ianhandley-lvt/session-rag`; external PRs are not a triage surface. See `docs/agents/issue-tracker.md`.
+Issues tracked as GitHub Issues in `ianhandley-lvt/memento`; external PRs are not a triage surface. See `docs/agents/issue-tracker.md`.
 
 ### Triage labels
 

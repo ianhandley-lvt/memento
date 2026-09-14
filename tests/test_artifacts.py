@@ -1,7 +1,7 @@
 import json
 from pathlib import Path
 
-from session_rag.artifacts import (
+from memento.artifacts import (
     artifact_path,
     clear_job_status,
     job_status_path,
