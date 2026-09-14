@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import hashlib
 import json
+import re
 import subprocess
 import tempfile
 from collections.abc import Callable
@@ -24,6 +26,34 @@ Runner = Callable[..., subprocess.CompletedProcess[str]]
 
 DEFAULT_PROMPT_VERSION = 1
 DEFAULT_MAX_OUTPUT_RETRIES = 1
+TEXT_EXTENSIONS = frozenset({".md", ".txt"})
+_NON_SLUG = re.compile(r"[^a-z0-9]+")
+
+
+def _slug(value: str) -> str:
+    return _NON_SLUG.sub("-", value.lower()).strip("-") or "source"
+
+
+def raw_source_id(knowledge_base_id: str, raw_dir: Path, document: Path) -> str:
+    relative = document.relative_to(raw_dir).with_suffix("")
+    relative_slug = "--".join(_slug(part) for part in relative.parts)
+    path_digest = hashlib.sha256(relative.as_posix().encode()).hexdigest()[:12]
+    return f"{_slug(knowledge_base_id)}--{relative_slug}--{path_digest}"
+
+
+def raw_source_documents(raw_dir: Path) -> list[Path]:
+    """Text/Markdown files under a RAW/ folder, in extraction order.
+
+    Skips anything not yet text-shaped (images, PDFs, screenshots — out of
+    scope here, see RawKnowledgeExtractor's docstring) and anything
+    underscore-prefixed (second-brain's own convention for a manifest or
+    template file, e.g. _INGESTED.md, rather than a knowledge source)."""
+
+    return sorted(
+        path
+        for path in raw_dir.rglob("*")
+        if path.is_file() and path.suffix.lower() in TEXT_EXTENSIONS and not path.name.startswith("_")
+    )
 
 
 def _configured(value: str | None, env_var: str, default: str) -> str:

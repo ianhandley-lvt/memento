@@ -481,6 +481,99 @@ def test_cli_extract_raw_source_writes_extraction_artifact(tmp_path, capsys):
     assert envelope["episode_records"][0]["question"] == "Why was device identity left as-is?"
 
 
+def test_import_raw_sources_discovers_text_files_and_skips_underscored_manifest(tmp_path, capsys):
+    raw = tmp_path / "lvcore_kb" / "RAW"
+    raw.mkdir(parents=True)
+    (raw / "decision.md").write_text("The team decided to leave device identity as-is.\n")
+    (raw / "note.txt").write_text("A plain text note.\n")
+    (raw / "_INGESTED.md").write_text("| File | Date |\n")
+    (raw / "diagram.png").write_bytes(b"not text")
+    artifacts = tmp_path / "artifacts"
+
+    assert run([
+        "import-raw-sources", str(raw), "--knowledge-base-id", "lvcore-raw",
+        "--project-id", "lvcore", "--artifacts", str(artifacts), "--dry-run",
+    ]) == 0
+
+    output = json.loads(capsys.readouterr().out)
+    assert output["discovered"] == 2
+    assert output["eligible"] == 2
+
+
+def test_import_raw_sources_extracts_and_indexes(tmp_path, capsys):
+    raw = tmp_path / "lvcore_kb" / "RAW"
+    raw.mkdir(parents=True)
+    document = raw / "decision.md"
+    document.write_text("The team decided to leave device identity as-is.\n")
+    artifacts = tmp_path / "artifacts"
+    database = tmp_path / "database"
+    record = make_record(
+        question="Why was device identity left as-is?",
+        source=str(document.resolve()),
+        source_type="raw_knowledge_source",
+    )
+    fake = FakeExtractor([record])
+
+    exit_code = run(
+        [
+            "import-raw-sources", str(raw), "--knowledge-base-id", "lvcore-raw",
+            "--project-id", "lvcore", "--artifacts", str(artifacts), "--database", str(database),
+        ],
+        KeywordEmbedder(),
+        fake,
+    )
+
+    assert exit_code == 0
+    assert fake.calls == 1
+    output = json.loads(capsys.readouterr().out)
+    assert output["discovered"] == 1
+    assert output["activated"] == 1
+    assert output["indexed"] == 1
+
+
+def test_import_raw_sources_resume_skips_unattempted_and_unchanged(tmp_path, capsys):
+    raw = tmp_path / "lvcore_kb" / "RAW"
+    raw.mkdir(parents=True)
+    document = raw / "decision.md"
+    document.write_text("The team decided to leave device identity as-is.\n")
+    artifacts = tmp_path / "artifacts"
+    database = tmp_path / "database"
+    record = make_record(source=str(document.resolve()), source_type="raw_knowledge_source")
+    fake = FakeExtractor([record])
+    args = [
+        "import-raw-sources", str(raw), "--knowledge-base-id", "lvcore-raw",
+        "--project-id", "lvcore", "--artifacts", str(artifacts), "--database", str(database),
+    ]
+
+    run(args, KeywordEmbedder(), fake)
+    capsys.readouterr()
+    assert run([*args, "--resume"], KeywordEmbedder(), fake) == 0
+    assert fake.calls == 1
+    assert json.loads(capsys.readouterr().out)["eligible"] == 0
+
+
+def test_import_raw_sources_reports_blocked_document_reason(tmp_path, capsys):
+    raw = tmp_path / "lvcore_kb" / "RAW"
+    raw.mkdir(parents=True)
+    (raw / "huge.md").write_text("x" * 100)
+    artifacts = tmp_path / "artifacts"
+    database = tmp_path / "database"
+    blocked = FakeExtractor(error=ExtractionBlocked("sanitized document exceeds 500000 characters"))
+
+    assert run(
+        [
+            "import-raw-sources", str(raw), "--knowledge-base-id", "lvcore-raw",
+            "--project-id", "lvcore", "--artifacts", str(artifacts), "--database", str(database),
+        ],
+        KeywordEmbedder(),
+        blocked,
+    ) == 0
+
+    output = json.loads(capsys.readouterr().out)
+    assert output["blocked"] == 1
+    assert output["attention_required"][0]["status"] == "blocked"
+
+
 def test_cli_extract_session_skips_extraction_when_artifact_already_exists(tmp_path):
     transcript = tmp_path / "session-123.jsonl"
     transcript.write_text(json.dumps({"type": "user", "message": {"content": "unchanged"}}) + "\n")

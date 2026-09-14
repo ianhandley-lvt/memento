@@ -15,7 +15,7 @@ from .embeddings import FastEmbedder
 from .deduplication import DEFAULT_SEMANTIC_DUPLICATE_THRESHOLD, reconcile_duplicates
 from .extractors import create_extractor
 from .extractors.cursor import CursorExtractor
-from .extractors.raw_knowledge import RawKnowledgeExtractor
+from .extractors.raw_knowledge import RawKnowledgeExtractor, raw_source_documents, raw_source_id
 from .extractors.base import KnowledgeExtractor, ProjectProvenance
 from .hook import format_context, handle_user_prompt
 from .health import CursorHealthChecker, HealthChecker, deterministic_findings, grounded_findings, write_report
@@ -36,7 +36,7 @@ from .retrieval import RetrievalScope
 from .retrieval import purge_traces
 from .retrieval import search as retrieval_search
 from .store import Embedder, delete_by_source_id, index_episode_records
-from .session_sources import claude_sessions, cursor_sessions, parse_since
+from .session_sources import SessionSource, claude_sessions, cursor_sessions, parse_since
 from .envconfig import env_value
 
 
@@ -101,6 +101,18 @@ def parser() -> argparse.ArgumentParser:
     extract_raw.add_argument("--project-id")
     extract_raw.add_argument("--project-root")
     extract_raw.add_argument("--max-sanitized-chars", type=int)
+    import_raw = commands.add_parser("import-raw-sources")
+    import_raw.add_argument("raw_dir", type=Path, nargs="?")
+    import_raw.add_argument("--knowledge-base-id", required=True)
+    import_raw.add_argument("--project-id")
+    import_raw.add_argument("--project-root")
+    import_raw.add_argument("--operator-id")
+    import_raw.add_argument("--cursor-mode", choices=["ask", "plan"])
+    import_raw.add_argument("--cursor-model")
+    import_raw.add_argument("--max-sanitized-chars", type=int)
+    import_raw.add_argument("--dry-run", action="store_true")
+    import_raw.add_argument("--resume", action="store_true", help="Retry only previously failed or blocked documents")
+    _add_storage_args(import_raw)
     search_cmd = commands.add_parser("search")
     search_cmd.add_argument("query")
     _add_storage_args(search_cmd)
@@ -605,6 +617,90 @@ def run(
                 indent=2,
             )
         )
+    elif args.command == "import-raw-sources":
+        raw_dir = args.raw_dir or resolved.knowledge_base
+        project_id = args.project_id or resolved.project_id
+        if raw_dir is None or not raw_dir.is_dir():
+            print(f"not a directory: {raw_dir}", file=sys.stderr)
+            return 1
+        project_id = _require(project_id, "project_id")
+        project_root = args.project_root or (str(resolved.project_root) if resolved.project_root else None)
+
+        documents = raw_source_documents(raw_dir)
+        sources = [
+            SessionSource(
+                "raw_knowledge_source",
+                raw_source_id(args.knowledge_base_id, raw_dir, document),
+                document,
+                project_id,
+                Path(project_root) if project_root else None,
+                updated_at=document.stat().st_mtime,
+            )
+            for document in documents
+        ]
+
+        counts = {"discovered": len(sources), "eligible": 0, "activated": 0, "unchanged": 0, "changed_since_failure": 0, "blocked": 0, "failed": 0, "pending_retry": 0}
+        attention_required = []
+        candidates = []
+        for source in sources:
+            hash_value = source_hash(source.path)
+            existing = artifact_path(artifacts, source_type=source.source_type, source_id=source.source_id, hash_value=hash_value).exists()
+            status_file = artifacts / source.source_type / source.source_id / "job_status.json"
+            if args.resume:
+                if not status_file.exists():
+                    continue
+                attempted_hash = json.loads(status_file.read_text()).get("attempted_hash")
+                if attempted_hash != hash_value:
+                    counts["changed_since_failure"] += 1
+                    attention_required.append({
+                        "source_type": source.source_type,
+                        "source_id": source.source_id,
+                        "status": "changed_since_failure",
+                        "reason": "source content changed since the recorded failed attempt",
+                        "next_action": "run a normal import without --resume to process the new revision",
+                    })
+                    continue
+            if not args.resume and existing:
+                counts["unchanged"] += 1
+                continue
+            candidates.append(source)
+        counts["eligible"] = len(candidates)
+        if not args.dry_run:
+            try:
+                raw_extractor = extractor or RawKnowledgeExtractor(
+                    mode=args.cursor_mode or resolved.cursor_mode,
+                    model=args.cursor_model or resolved.cursor_model,
+                    max_sanitized_chars=args.max_sanitized_chars or resolved.max_sanitized_chars,
+                    operator_id=args.operator_id or resolved.operator_id,
+                    project=ProjectProvenance(project_id=project_id, project_root=project_root),
+                )
+            except ValueError as error:
+                print(f"configuration error: {error}", file=sys.stderr)
+                return 3
+            for source in candidates:
+                outcome = run_extraction(
+                    raw_extractor, source.path, artifacts,
+                    source_type=source.source_type, source_id=source.source_id,
+                )
+                counts[{"no_op": "unchanged"}.get(outcome.status, outcome.status)] += 1
+                if outcome.status in {"blocked", "failed", "pending_retry"}:
+                    next_action = {
+                        "blocked": "resolve the stated reason, then use --resume if the source is unchanged; use a normal import if it changes",
+                        "failed": "correct the extractor or input problem, then use --resume if the source is unchanged",
+                        "pending_retry": "restore Cursor availability or quota, then run the same import with --resume",
+                    }[outcome.status]
+                    attention_required.append({
+                        "source_type": source.source_type,
+                        "source_id": source.source_id,
+                        "status": outcome.status,
+                        "reason": outcome.reason,
+                        "next_action": next_action,
+                    })
+            selected_embedder = embedder or FastEmbedder()
+            counts["indexed"], counts["exact_duplicates"], counts["possible_duplicates"] = _index_active_records(
+                artifacts, database, selected_embedder
+            )
+        print(json.dumps({**counts, "attention_required": attention_required}, indent=2))
     elif args.command == "search":
         selected_embedder = embedder or FastEmbedder()
         results, _trace = retrieval_search(
