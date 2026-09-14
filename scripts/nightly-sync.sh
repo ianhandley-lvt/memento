@@ -1,8 +1,14 @@
 #!/bin/sh
-# Nightly Memento sync: pulls new Claude/Cursor sessions and new RAW/Wiki
-# knowledge-base content into the shared artifact store + index. Idempotent —
-# every step dedups by content hash, so a re-run over unchanged content costs
-# nothing (no Cursor calls, no index churn).
+# Nightly Memento sync: pulls new Claude/Cursor sessions into the shared
+# artifact store + index. Idempotent — dedups by content hash, so a re-run
+# over unchanged content costs nothing (no Cursor calls, no index churn).
+#
+# second-brain (RAW/Wiki knowledge bases) is retired as of 2026-09-14 — its
+# lvcore and beacon content was fully captured into Memento and the live
+# directory archived to ~/src/personal/second-brain-archive, no longer fed
+# with new sources. No import step for it here: nothing new will ever land
+# there. If a similar KB is started again elsewhere, add its
+# import-markdown-kb / import-raw-sources steps back into this script.
 #
 # Not Slack-integrated on purpose: an unattended cron job must never
 # auto-send a message on Ian's behalf. Problems surface as a local macOS
@@ -37,33 +43,15 @@ notify() {
 
 log "=== nightly sync starting ==="
 
-run_step "import Claude sessions (all projects)" "$MEMENTO" import-sessions --source claude --all-projects >/dev/null
-run_step "import Cursor conversations" "$MEMENTO" import-sessions --source cursor >/dev/null
-
-# Wiki import (free, deterministic) — kept for continuity with any hand-edited
-# Wiki content. Add a line here if another KB's Wiki should also sync.
-run_step "import lvcore Wiki" "$MEMENTO" import-markdown-kb \
-  "$HOME/src/personal/second-brain/lvcore_kb/Wiki" \
-  --knowledge-base-id lvcore --project-id lvcore --temporal-scope durable >/dev/null
-run_step "import beacon Wiki" "$MEMENTO" import-markdown-kb \
-  "$HOME/src/personal/second-brain/beacon_kb/Wiki" \
-  --knowledge-base-id beacon --project-id beacon --temporal-scope durable >/dev/null
-
-# RAW import (spends Cursor quota, but only for genuinely new/changed files —
-# unchanged sources are skipped by content hash before any call is made).
-raw_lvcore=$(run_step "import lvcore RAW sources" "$MEMENTO" import-raw-sources \
-  "$HOME/src/personal/second-brain/lvcore_kb/RAW" \
-  --knowledge-base-id lvcore-raw --project-id lvcore)
-raw_beacon=$(run_step "import beacon RAW sources" "$MEMENTO" import-raw-sources \
-  "$HOME/src/personal/second-brain/beacon_kb/RAW" \
-  --knowledge-base-id beacon-raw --project-id beacon)
+sessions_claude=$(run_step "import Claude sessions (all projects)" "$MEMENTO" import-sessions --source claude --all-projects)
+sessions_cursor=$(run_step "import Cursor conversations" "$MEMENTO" import-sessions --source cursor)
 
 # Surface anything that needs a human: real failures immediately, and
 # pending_retry only once it's stale (younger than 48h self-heals on its own
 # on tomorrow's run — see run_extraction's hash-based re-candidacy, no code
 # needed for that case).
 problems=""
-for batch_output in "$raw_lvcore" "$raw_beacon"; do
+for batch_output in "$sessions_claude" "$sessions_cursor"; do
   blocked=$(printf '%s' "$batch_output" | python3 -c "import json,sys; d=json.load(sys.stdin); print(d.get('blocked',0)+d.get('failed',0))" 2>/dev/null || echo 0)
   if [ "${blocked:-0}" != "0" ] && [ "${blocked:-0}" != "" ]; then
     problems="${problems}${blocked} blocked/failed source(s); "
