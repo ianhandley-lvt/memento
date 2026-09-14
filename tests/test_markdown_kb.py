@@ -105,10 +105,46 @@ RabbitMQ heartbeat alerts identify stalled consumers.
     assert records[0]["timestamp"].startswith("2026-08-28")
     assert records[0]["document_status"] == "established"
     assert records[0]["source_references"] == ["observability-conventions", "log-runbook"]
+    assert all(record["related_records"] == ["lvcore-architecture"] for record in records)
     assert records[1]["evidence_location"] == {
         "identifier": "body/finding-logs",
         "preserved_text": "Find the EC2 instance ID, then open the matching CloudWatch log stream.",
     }
+
+
+def test_markdown_related_records_merge_inline_links_with_related_section(tmp_path, capsys):
+    wiki = tmp_path / "lvcore_kb" / "Wiki"
+    artifacts = tmp_path / "artifacts"
+    _write_article(
+        wiki,
+        """# LVCore Messaging
+
+## No links here
+
+Plain text with nothing to relate to.
+
+## Cites inline
+
+See [[commandproxy]] for the socket API this depends on.
+
+## Related
+
+- [[lvcore-architecture]]
+- [[commandproxy]]
+""",
+    )
+
+    run(_import_args(wiki, artifacts))
+
+    source_id = _source_id(wiki)
+    active_hash = read_active_hash(artifacts, source_type="markdown_knowledge_base", source_id=source_id)
+    path = artifact_path(artifacts, source_type="markdown_knowledge_base", source_id=source_id, hash_value=active_hash)
+    records = json.loads(path.read_text())["episode_records"]
+
+    assert records[0]["question"] == "LVCore Messaging: No links here"
+    assert records[0]["related_records"] == ["lvcore-architecture", "commandproxy"]
+    assert records[1]["question"] == "LVCore Messaging: Cites inline"
+    assert records[1]["related_records"] == ["commandproxy", "lvcore-architecture"]
 
 
 def test_cli_markdown_import_is_no_op_until_article_changes(tmp_path, capsys):

@@ -107,6 +107,12 @@ class StructuredRecord(ExtractedKnowledge):
     prompt_version: int
     document_status: ShortText | None = None
     source_references: list[ShortText] = Field(default_factory=list, max_length=100)
+    # Application-derived, like source_references — never model output. Other
+    # Episode Records (by source_session_id) this one relates to: a curated
+    # Markdown article's own [[wikilink]] cross-references, preserved rather
+    # than left as inert text once the article itself stops being the
+    # authoritative, human-read artifact.
+    related_records: list[ShortText] = Field(default_factory=list, max_length=100)
     # Overrides ExtractedKnowledge.evidence_location (a bare model-proposed
     # str) with the application-resolved EvidenceLocation object — same
     # field name as the draft, reprocessed by application code before a

@@ -148,6 +148,24 @@ def _document_metadata(markdown: str) -> tuple[str | None, list[str]]:
     return status, list(dict.fromkeys(references))[:100]
 
 
+def _related_articles(sections: list[MarkdownSection]) -> list[str]:
+    """The article's own top-level '## Related' list of [[wikilink]] cross-
+    references to other Wiki articles — navigation the author already wrote,
+    not something to infer. Distinct from _document_metadata's source_references
+    (which sources fed this article), and from the per-section inline links
+    extraction pulls from each section's own text."""
+
+    for section in sections:
+        if section.heading_path[-1].strip().lower() == "related":
+            return list(dict.fromkeys(_WIKILINK.findall(section.text)))[:100]
+    return []
+
+
+def _related_records(text: str, related_articles: list[str], *, limit: int = 100) -> list[str]:
+    inline = _WIKILINK.findall(text)
+    return list(dict.fromkeys([*inline, *related_articles]))[:limit]
+
+
 def _configured(value: str | None, env_name: str) -> str:
     resolved = value or env_value(env_name.removeprefix("MEMENTO_"), "")
     if not resolved:
@@ -164,7 +182,10 @@ class MarkdownKnowledgeBaseExtractor:
 
     name = "markdown"
     model = "deterministic"
-    prompt_version = 1
+    # v2: Related-section and inline [[wikilinks]] now populate related_records
+    # instead of being dropped — bump so artifact provenance shows which
+    # articles were (re-)extracted under the fixed behavior.
+    prompt_version = 2
 
     def __init__(
         self,
@@ -186,6 +207,7 @@ class MarkdownKnowledgeBaseExtractor:
         title, sections = _sections(markdown)
         timestamp = _timestamp(markdown)
         document_status, source_references = _document_metadata(markdown)
+        related_articles = _related_articles(sections)
         source_id = article.stem
         records: list[StructuredRecord] = []
         identifiers: dict[str, int] = {}
@@ -222,6 +244,7 @@ class MarkdownKnowledgeBaseExtractor:
                         prompt_version=self.prompt_version,
                         document_status=document_status,
                         source_references=source_references,
+                        related_records=_related_records(text, related_articles),
                     )
                 )
         return records
