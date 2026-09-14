@@ -15,6 +15,7 @@ from .embeddings import FastEmbedder
 from .deduplication import DEFAULT_SEMANTIC_DUPLICATE_THRESHOLD, reconcile_duplicates
 from .extractors import create_extractor
 from .extractors.cursor import CursorExtractor
+from .extractors.raw_knowledge import RawKnowledgeExtractor
 from .extractors.base import KnowledgeExtractor, ProjectProvenance
 from .hook import format_context, handle_user_prompt
 from .health import CursorHealthChecker, HealthChecker, deterministic_findings, grounded_findings, write_report
@@ -91,6 +92,15 @@ def parser() -> argparse.ArgumentParser:
     extract.add_argument("--project-id")
     extract.add_argument("--project-root")
     extract.add_argument("--max-sanitized-chars", type=int)
+    extract_raw = commands.add_parser("extract-raw-source")
+    extract_raw.add_argument("document", type=Path)
+    _add_storage_args(extract_raw, database=False)
+    extract_raw.add_argument("--cursor-mode", choices=["ask", "plan"])
+    extract_raw.add_argument("--cursor-model")
+    extract_raw.add_argument("--operator-id")
+    extract_raw.add_argument("--project-id")
+    extract_raw.add_argument("--project-root")
+    extract_raw.add_argument("--max-sanitized-chars", type=int)
     search_cmd = commands.add_parser("search")
     search_cmd.add_argument("query")
     _add_storage_args(search_cmd)
@@ -522,6 +532,52 @@ def run(
             return 3
 
         outcome = run_extraction(selected_extractor, args.transcript, artifacts)
+
+        if outcome.status == "blocked":
+            print(f"blocked: {outcome.reason}", file=sys.stderr)
+            return 2
+        if outcome.status == "pending_retry":
+            print(f"pending_retry: {outcome.reason}", file=sys.stderr)
+            return 4
+        if outcome.status == "failed":
+            print(f"failed: {outcome.reason}", file=sys.stderr)
+            return 1
+
+        if outcome.orphaned_questions:
+            print(
+                f"note: {len(outcome.orphaned_questions)} record(s) from the previous revision have no "
+                "obvious counterpart in this extraction — review for verification, rejection, or supersession:",
+                file=sys.stderr,
+            )
+            for question in outcome.orphaned_questions:
+                print(f"  - {question}", file=sys.stderr)
+
+        envelope = json.loads(outcome.artifact_path.read_text())
+        print(
+            json.dumps(
+                {"artifact_path": str(outcome.artifact_path), "records": envelope["episode_records"]},
+                indent=2,
+            )
+        )
+    elif args.command == "extract-raw-source":
+        try:
+            project = (
+                ProjectProvenance(project_id=resolved.project_id, project_root=str(resolved.project_root) if resolved.project_root else None)
+                if resolved.project_id
+                else None
+            )
+            raw_extractor = extractor or RawKnowledgeExtractor(
+                mode=resolved.cursor_mode,
+                model=resolved.cursor_model,
+                max_sanitized_chars=resolved.max_sanitized_chars,
+                operator_id=resolved.operator_id,
+                project=project,
+            )
+        except ValueError as error:
+            print(f"configuration error: {error}", file=sys.stderr)
+            return 3
+
+        outcome = run_extraction(raw_extractor, args.document, artifacts, source_type="raw_knowledge_source")
 
         if outcome.status == "blocked":
             print(f"blocked: {outcome.reason}", file=sys.stderr)

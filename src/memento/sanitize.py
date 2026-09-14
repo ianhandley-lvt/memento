@@ -79,6 +79,35 @@ class SanitizationBudgetExceeded(RuntimeError):
         )
 
 
+def sanitize_document(
+    path: Path,
+    *,
+    sensitive_paths: tuple[str, ...] = (),
+    max_chars: int = DEFAULT_MAX_SANITIZED_CHARS,
+) -> SanitizedSession:
+    """Render a plain-text/Markdown RAW knowledge source into the same
+    SanitizedSession shape sessions use, so extraction, Evidence Location
+    resolution, and budget enforcement share one mechanism across both.
+
+    Splits on blank lines (paragraph boundaries) rather than parsing any
+    session structure — a RAW source has none. Each paragraph is its own
+    addressable entry, numbered by position (`para-1`, `para-2`, ...): stable
+    as long as the document's paragraph order doesn't change, unlike a
+    session transcript there is no better-than-position identifier available.
+    """
+
+    text = path.read_text(errors="replace")
+    blocks = [block.strip() for block in re.split(r"\n\s*\n", text) if block.strip()]
+    entries = [
+        SanitizedEntry(identifier=f"para-{index}", text=redact_secrets(block, sensitive_paths=sensitive_paths))
+        for index, block in enumerate(blocks, start=1)
+    ]
+    sanitized = SanitizedSession(entries=entries)
+    if len(sanitized.prompt_text) > max_chars:
+        raise SanitizationBudgetExceeded(len(sanitized.prompt_text), max_chars)
+    return sanitized
+
+
 def redact_secrets(text: str, *, sensitive_paths: tuple[str, ...] = ()) -> str:
     """Best-effort redaction. Does not guarantee no secret can escape.
 

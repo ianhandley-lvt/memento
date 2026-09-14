@@ -453,6 +453,34 @@ def test_cli_extract_session_writes_extraction_artifact(tmp_path, capsys):
     assert envelope["episode_records"][0]["question"] == "Why did it break?"
 
 
+def test_cli_extract_raw_source_writes_extraction_artifact(tmp_path, capsys):
+    document = tmp_path / "device-identity-decision.md"
+    document.write_text("The team decided to leave device identity as-is for now.\n")
+    artifacts_dir = tmp_path / "artifacts"
+    record = make_record(
+        question="Why was device identity left as-is?",
+        summary="Bridging was declined as papering over a transitional problem.",
+        source=str(document.resolve()),
+        source_session_id="device-identity-decision",
+        source_type="raw_knowledge_source",
+    )
+
+    exit_code = run(
+        ["extract-raw-source", str(document), "--artifacts", str(artifacts_dir)],
+        extractor=FakeExtractor([record]),
+    )
+
+    assert exit_code == 0
+    output = json.loads(capsys.readouterr().out)
+    artifact_path_value = Path(output["artifact_path"])
+    assert artifact_path_value.exists()
+    assert artifact_path_value.is_relative_to(artifacts_dir)
+    envelope = json.loads(artifact_path_value.read_text())
+    assert envelope["source_id"] == "device-identity-decision"
+    assert envelope["episode_records"][0]["source_type"] == "raw_knowledge_source"
+    assert envelope["episode_records"][0]["question"] == "Why was device identity left as-is?"
+
+
 def test_cli_extract_session_skips_extraction_when_artifact_already_exists(tmp_path):
     transcript = tmp_path / "session-123.jsonl"
     transcript.write_text(json.dumps({"type": "user", "message": {"content": "unchanged"}}) + "\n")
