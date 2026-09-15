@@ -10,6 +10,7 @@ from memento.confluence import (
     confluence_source_id,
     fetch_confluence_page,
     parse_confluence_url,
+    resolve_confluence_url,
     storage_to_text,
 )
 
@@ -33,6 +34,45 @@ def test_parse_confluence_url_handles_legacy_viewpage_form():
 def test_parse_confluence_url_rejects_non_confluence_url():
     with pytest.raises(ConfluenceURLError):
         parse_confluence_url("https://example.com/some/article")
+
+
+def test_resolve_confluence_url_passes_through_canonical_url_without_network():
+    with patch("urllib.request.urlopen", side_effect=AssertionError("must not hit the network")):
+        base_url, page_id = resolve_confluence_url(
+            "https://liveviewtech.atlassian.net/wiki/spaces/SD/pages/4336746654/Backend+Core+Team",
+            email="ian@lvt.com", token="secret",
+        )
+    assert base_url == "https://liveviewtech.atlassian.net"
+    assert page_id == "4336746654"
+
+
+def test_resolve_confluence_url_follows_tiny_link_redirect():
+    response = MagicMock()
+    response.geturl.return_value = (
+        "https://liveviewtech.atlassian.net/wiki/spaces/SD/pages/4244930582/Observability"
+    )
+    response.__enter__.return_value = response
+    with patch("urllib.request.urlopen", return_value=response):
+        base_url, page_id = resolve_confluence_url(
+            "https://liveviewtech.atlassian.net/wiki/x/FoAE-Q", email="ian@lvt.com", token="secret",
+        )
+    assert base_url == "https://liveviewtech.atlassian.net"
+    assert page_id == "4244930582"
+
+
+def test_resolve_confluence_url_reports_auth_failure_on_tiny_link():
+    error = urllib.error.HTTPError(url="", code=401, msg="Unauthorized", hdrs=None, fp=None)
+    with patch("urllib.request.urlopen", side_effect=error):
+        with pytest.raises(ConfluenceFetchError, match="authentication failed"):
+            resolve_confluence_url(
+                "https://liveviewtech.atlassian.net/wiki/x/FoAE-Q", email="ian@lvt.com", token="bad",
+            )
+
+
+def test_resolve_confluence_url_still_rejects_unrecognized_url_without_network():
+    with patch("urllib.request.urlopen", side_effect=AssertionError("must not hit the network")):
+        with pytest.raises(ConfluenceURLError):
+            resolve_confluence_url("https://example.com/some/article", email="ian@lvt.com", token="secret")
 
 
 def test_confluence_source_id_is_stable_for_same_page():

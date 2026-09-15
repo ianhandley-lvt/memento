@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
-from .confluence import ConfluenceFetchError, ConfluenceURLError, confluence_source_id, fetch_confluence_page, parse_confluence_url
+from .confluence import ConfluenceFetchError, ConfluenceURLError, confluence_source_id, fetch_confluence_page, resolve_confluence_url
 
 
 @dataclass(frozen=True)
@@ -89,7 +89,7 @@ def confluence_url_sources(
     fetch_failures: list[dict] = []
     for url in urls:
         try:
-            base_url, page_id = parse_confluence_url(url)
+            base_url, page_id = resolve_confluence_url(url, email=email, token=token)
             page = fetch(base_url, page_id, email=email, token=token)
         except (ConfluenceURLError, ConfluenceFetchError) as error:
             fetch_failures.append({"url": url, "reason": str(error)})

@@ -11,6 +11,7 @@ from urllib.parse import parse_qs, urlparse
 
 _NON_SLUG = re.compile(r"[^a-z0-9]+")
 _PAGE_PATH = re.compile(r"/wiki/spaces/[^/]+/pages/(\d+)")
+_TINY_LINK_PATH = re.compile(r"^/wiki/x/[A-Za-z0-9_-]+$")
 _BLOCK_TAGS = frozenset({
     "p", "div", "li", "h1", "h2", "h3", "h4", "h5", "h6", "tr", "br",
     "blockquote", "table", "ul", "ol", "pre",
@@ -63,6 +64,33 @@ def parse_confluence_url(url: str) -> tuple[str, str]:
     raise ConfluenceURLError(
         f"not a recognized Confluence page URL (expected /wiki/spaces/.../pages/<id>/...): {url!r}"
     )
+
+
+def resolve_confluence_url(url: str, *, email: str, token: str, timeout: int = 30) -> tuple[str, str]:
+    """Like `parse_confluence_url`, but also handles Confluence's `/wiki/x/<code>`
+    tiny-link form — what the "Copy link" button actually gives you, not the
+    canonical `/wiki/spaces/.../pages/<id>/...` shape. The short code isn't
+    decodable locally, so an authenticated request follows Confluence's own
+    redirect to the canonical URL and parses that instead."""
+
+    try:
+        return parse_confluence_url(url)
+    except ConfluenceURLError:
+        parsed = urlparse(url)
+        if not (parsed.scheme and parsed.netloc and _TINY_LINK_PATH.match(parsed.path)):
+            raise
+
+    credentials = base64.b64encode(f"{email}:{token}".encode()).decode()
+    request = urllib.request.Request(url, headers={"Authorization": f"Basic {credentials}"})
+    try:
+        with urllib.request.urlopen(request, timeout=timeout) as response:
+            resolved_url = response.geturl()
+    except urllib.error.HTTPError as error:
+        reason = "authentication failed (check the Atlassian API token)" if error.code in (401, 403) else str(error)
+        raise ConfluenceFetchError(f"could not resolve short link {url}: {reason}") from error
+    except urllib.error.URLError as error:
+        raise ConfluenceFetchError(f"could not resolve short link {url}: {error.reason}") from error
+    return parse_confluence_url(resolved_url)
 
 
 def confluence_source_id(base_url: str, page_id: str) -> str:
