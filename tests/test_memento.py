@@ -9,6 +9,7 @@ import pytest
 from memento.artifacts import artifact_path, find_record, job_status_path, load_active_episode_records, read_active_hash
 from memento.app_config import load_app_config
 from memento.cli import run
+from memento.confluence import ConfluenceFetchError, ConfluencePage
 from memento.extractors.base import (
     EvidenceLocation,
     ExtractionBlocked,
@@ -572,6 +573,100 @@ def test_import_raw_sources_reports_blocked_document_reason(tmp_path, capsys):
     output = json.loads(capsys.readouterr().out)
     assert output["blocked"] == 1
     assert output["attention_required"][0]["status"] == "blocked"
+
+
+def _fake_confluence_fetch(pages: dict[str, ConfluencePage]):
+    def fetch(base_url, page_id, *, email, token):
+        if page_id not in pages:
+            raise ConfluenceFetchError(f"no such page: {page_id}")
+        return pages[page_id]
+    return fetch
+
+
+def test_import_url_requires_atlassian_email(tmp_path, capsys):
+    artifacts = tmp_path / "artifacts"
+
+    exit_code = run([
+        "import-url", "https://liveviewtech.atlassian.net/wiki/spaces/SD/pages/1/Title",
+        "--project-id", "observability", "--artifacts", str(artifacts), "--dry-run",
+    ])
+
+    assert exit_code == 3
+    assert "atlassian-email" in capsys.readouterr().err
+
+
+def test_import_url_dry_run_discovers_page(tmp_path, monkeypatch, capsys):
+    monkeypatch.setattr("memento.cli.read_keychain_secret", lambda service, account: "token")
+    artifacts = tmp_path / "artifacts"
+    page = ConfluencePage(
+        base_url="https://liveviewtech.atlassian.net", page_id="1", title="Runbook",
+        text="Some guild content.", version=1, url="https://liveviewtech.atlassian.net/wiki/spaces/SD/pages/1",
+    )
+
+    exit_code = run(
+        [
+            "import-url", "https://liveviewtech.atlassian.net/wiki/spaces/SD/pages/1/Runbook",
+            "--project-id", "observability", "--atlassian-email", "ian@lvt.com",
+            "--artifacts", str(artifacts), "--dry-run",
+        ],
+        url_fetcher=_fake_confluence_fetch({"1": page}),
+    )
+
+    assert exit_code == 0
+    output = json.loads(capsys.readouterr().out)
+    assert output["discovered"] == 1
+    assert output["eligible"] == 1
+
+
+def test_import_url_extracts_and_indexes(tmp_path, monkeypatch, capsys):
+    monkeypatch.setattr("memento.cli.read_keychain_secret", lambda service, account: "token")
+    artifacts = tmp_path / "artifacts"
+    database = tmp_path / "database"
+    page = ConfluencePage(
+        base_url="https://liveviewtech.atlassian.net", page_id="1", title="Runbook",
+        text="Some guild content.", version=1, url="https://liveviewtech.atlassian.net/wiki/spaces/SD/pages/1",
+    )
+    record = make_record(
+        source="https://liveviewtech.atlassian.net/wiki/spaces/SD/pages/1",
+        source_type="confluence_page",
+    )
+    fake = FakeExtractor([record])
+
+    exit_code = run(
+        [
+            "import-url", "https://liveviewtech.atlassian.net/wiki/spaces/SD/pages/1/Runbook",
+            "--project-id", "observability", "--atlassian-email", "ian@lvt.com",
+            "--artifacts", str(artifacts), "--database", str(database),
+        ],
+        KeywordEmbedder(),
+        fake,
+        url_fetcher=_fake_confluence_fetch({"1": page}),
+    )
+
+    assert exit_code == 0
+    assert fake.calls == 1
+    output = json.loads(capsys.readouterr().out)
+    assert output["activated"] == 1
+    assert output["indexed"] == 1
+
+
+def test_import_url_reports_fetch_failure_as_attention_required(tmp_path, monkeypatch, capsys):
+    monkeypatch.setattr("memento.cli.read_keychain_secret", lambda service, account: "token")
+    artifacts = tmp_path / "artifacts"
+
+    exit_code = run(
+        [
+            "import-url", "https://liveviewtech.atlassian.net/wiki/spaces/SD/pages/404/Missing",
+            "--project-id", "observability", "--atlassian-email", "ian@lvt.com",
+            "--artifacts", str(artifacts), "--dry-run",
+        ],
+        url_fetcher=_fake_confluence_fetch({}),
+    )
+
+    assert exit_code == 0
+    output = json.loads(capsys.readouterr().out)
+    assert output["failed"] == 1
+    assert output["attention_required"][0]["reason"] == "no such page: 404"
 
 
 def test_cli_extract_session_skips_extraction_when_artifact_already_exists(tmp_path):

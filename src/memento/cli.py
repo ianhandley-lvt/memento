@@ -36,8 +36,77 @@ from .retrieval import RetrievalScope
 from .retrieval import purge_traces
 from .retrieval import search as retrieval_search
 from .store import Embedder, delete_by_source_id, index_episode_records
-from .session_sources import SessionSource, claude_sessions, cursor_sessions, parse_since
+from .session_sources import SessionSource, claude_sessions, confluence_url_sources, cursor_sessions, parse_since
+from .confluence import fetch_confluence_page
+from .secrets import KeychainSecretError, read_keychain_secret
 from .envconfig import env_value
+
+_CONFLUENCE_KEYCHAIN_SERVICE = "memento-atlassian-api-token"
+
+
+_NEXT_ACTION = {
+    "blocked": "resolve the stated reason, then use --resume if the source is unchanged; use a normal import if it changes",
+    "failed": "correct the extractor or input problem, then use --resume if the source is unchanged",
+    "pending_retry": "restore Cursor availability or quota, then run the same import with --resume",
+}
+
+
+def _select_batch_candidates(
+    sources: list[SessionSource], artifacts: Path, resume: bool
+) -> tuple[list[SessionSource], dict, list[dict]]:
+    """Shared by every batch-import command (Claude/Cursor sessions, RAW
+    sources, Confluence URLs): partitions discovered sources into what's
+    eligible to (re-)extract, skipping unchanged revisions and — under
+    --resume — anything that hasn't previously failed or whose content
+    changed since that failure."""
+
+    counts = {
+        "discovered": len(sources), "eligible": 0, "activated": 0, "unchanged": 0,
+        "changed_since_failure": 0, "blocked": 0, "failed": 0, "pending_retry": 0,
+    }
+    attention_required: list[dict] = []
+    candidates: list[SessionSource] = []
+    for source in sources:
+        hash_value = source_hash(source.path)
+        existing = artifact_path(artifacts, source_type=source.source_type, source_id=source.source_id, hash_value=hash_value).exists()
+        status_file = artifacts / source.source_type / source.source_id / "job_status.json"
+        if resume:
+            if not status_file.exists():
+                continue
+            attempted_hash = json.loads(status_file.read_text()).get("attempted_hash")
+            if attempted_hash != hash_value:
+                counts["changed_since_failure"] += 1
+                attention_required.append({
+                    "source_type": source.source_type,
+                    "source_id": source.source_id,
+                    "status": "changed_since_failure",
+                    "reason": "source content changed since the recorded failed attempt",
+                    "next_action": "run a normal import without --resume to process the new revision",
+                })
+                continue
+        if not resume and existing:
+            counts["unchanged"] += 1
+            continue
+        candidates.append(source)
+    counts["eligible"] = len(candidates)
+    return candidates, counts, attention_required
+
+
+def _run_batch_candidates(candidates, counts: dict, attention_required: list[dict], run_one) -> None:
+    """Runs `run_one(source) -> ExtractionOutcome` over each candidate,
+    folding the result into `counts`/`attention_required` in place."""
+
+    for source in candidates:
+        outcome = run_one(source)
+        counts[{"no_op": "unchanged"}.get(outcome.status, outcome.status)] += 1
+        if outcome.status in {"blocked", "failed", "pending_retry"}:
+            attention_required.append({
+                "source_type": source.source_type,
+                "source_id": source.source_id,
+                "status": outcome.status,
+                "reason": outcome.reason,
+                "next_action": _NEXT_ACTION[outcome.status],
+            })
 
 
 def _add_record_command_args(subparser: argparse.ArgumentParser) -> None:
@@ -113,6 +182,18 @@ def parser() -> argparse.ArgumentParser:
     import_raw.add_argument("--dry-run", action="store_true")
     import_raw.add_argument("--resume", action="store_true", help="Retry only previously failed or blocked documents")
     _add_storage_args(import_raw)
+    import_url = commands.add_parser("import-url", help="Import Confluence Cloud pages by URL")
+    import_url.add_argument("urls", nargs="+", help="One or more Confluence page URLs")
+    import_url.add_argument("--atlassian-email", help="Also read as MEMENTO_ATLASSIAN_EMAIL")
+    import_url.add_argument("--project-id")
+    import_url.add_argument("--project-root")
+    import_url.add_argument("--operator-id")
+    import_url.add_argument("--cursor-mode", choices=["ask", "plan"])
+    import_url.add_argument("--cursor-model")
+    import_url.add_argument("--max-sanitized-chars", type=int)
+    import_url.add_argument("--dry-run", action="store_true")
+    import_url.add_argument("--resume", action="store_true", help="Retry only previously failed or blocked pages")
+    _add_storage_args(import_url)
     search_cmd = commands.add_parser("search")
     search_cmd.add_argument("query")
     _add_storage_args(search_cmd)
@@ -282,6 +363,7 @@ def run(
     embedder: Embedder | None = None,
     extractor: KnowledgeExtractor | None = None,
     health_checker: HealthChecker | None = None,
+    url_fetcher=None,
 ) -> int:
     args = parser().parse_args(arguments)
     try:
@@ -413,34 +495,9 @@ def run(
         if cutoff is not None:
             sources = [source for source in sources if source.updated_at is None or source.updated_at >= cutoff]
 
-        counts = {"discovered": len(sources), "eligible": 0, "activated": 0, "unchanged": 0, "changed_since_failure": 0, "blocked": 0, "failed": 0, "pending_retry": 0}
-        attention_required = []
-        candidates = []
-        for source in sources:
-            hash_value = source_hash(source.path)
-            existing = artifact_path(artifacts, source_type=source.source_type, source_id=source.source_id, hash_value=hash_value).exists()
-            status_file = artifacts / source.source_type / source.source_id / "job_status.json"
-            if args.resume:
-                if not status_file.exists():
-                    continue
-                attempted_hash = json.loads(status_file.read_text()).get("attempted_hash")
-                if attempted_hash != hash_value:
-                    counts["changed_since_failure"] += 1
-                    attention_required.append({
-                        "source_type": source.source_type,
-                        "source_id": source.source_id,
-                        "status": "changed_since_failure",
-                        "reason": "source content changed since the recorded failed attempt",
-                        "next_action": "run a normal import without --resume to process the new revision",
-                    })
-                    continue
-            if not args.resume and existing:
-                counts["unchanged"] += 1
-                continue
-            candidates.append(source)
-        counts["eligible"] = len(candidates)
+        candidates, counts, attention_required = _select_batch_candidates(sources, artifacts, args.resume)
         if not args.dry_run:
-            for source in candidates:
+            def run_one(source: SessionSource):
                 project = ProjectProvenance(project_id=source.project_id, project_root=str(source.project_root)) if source.project_id else None
                 selected = extractor or CursorExtractor(
                     mode=resolved.cursor_mode, model=resolved.cursor_model,
@@ -448,24 +505,11 @@ def run(
                     operator_id=resolved.operator_id, project=project,
                     source_type=source.source_type, source_id=source.source_id, source_uri=source.source_uri,
                 )
-                outcome = run_extraction(
+                return run_extraction(
                     selected, source.path, artifacts,
                     source_type=source.source_type, source_id=source.source_id, source_uri=source.source_uri,
                 )
-                counts[{"no_op": "unchanged"}.get(outcome.status, outcome.status)] += 1
-                if outcome.status in {"blocked", "failed", "pending_retry"}:
-                    next_action = {
-                        "blocked": "resolve the stated reason, then use --resume if the source is unchanged; use a normal import if it changes",
-                        "failed": "correct the extractor or input problem, then use --resume if the source is unchanged",
-                        "pending_retry": "restore Cursor availability or quota, then run the same import with --resume",
-                    }[outcome.status]
-                    attention_required.append({
-                        "source_type": source.source_type,
-                        "source_id": source.source_id,
-                        "status": outcome.status,
-                        "reason": outcome.reason,
-                        "next_action": next_action,
-                    })
+            _run_batch_candidates(candidates, counts, attention_required, run_one)
             selected_embedder = embedder or FastEmbedder()
             counts["indexed"], counts["exact_duplicates"], counts["possible_duplicates"] = _index_active_records(
                 artifacts, database, selected_embedder
@@ -639,32 +683,7 @@ def run(
             for document in documents
         ]
 
-        counts = {"discovered": len(sources), "eligible": 0, "activated": 0, "unchanged": 0, "changed_since_failure": 0, "blocked": 0, "failed": 0, "pending_retry": 0}
-        attention_required = []
-        candidates = []
-        for source in sources:
-            hash_value = source_hash(source.path)
-            existing = artifact_path(artifacts, source_type=source.source_type, source_id=source.source_id, hash_value=hash_value).exists()
-            status_file = artifacts / source.source_type / source.source_id / "job_status.json"
-            if args.resume:
-                if not status_file.exists():
-                    continue
-                attempted_hash = json.loads(status_file.read_text()).get("attempted_hash")
-                if attempted_hash != hash_value:
-                    counts["changed_since_failure"] += 1
-                    attention_required.append({
-                        "source_type": source.source_type,
-                        "source_id": source.source_id,
-                        "status": "changed_since_failure",
-                        "reason": "source content changed since the recorded failed attempt",
-                        "next_action": "run a normal import without --resume to process the new revision",
-                    })
-                    continue
-            if not args.resume and existing:
-                counts["unchanged"] += 1
-                continue
-            candidates.append(source)
-        counts["eligible"] = len(candidates)
+        candidates, counts, attention_required = _select_batch_candidates(sources, artifacts, args.resume)
         if not args.dry_run:
             try:
                 raw_extractor = extractor or RawKnowledgeExtractor(
@@ -677,30 +696,75 @@ def run(
             except ValueError as error:
                 print(f"configuration error: {error}", file=sys.stderr)
                 return 3
-            for source in candidates:
-                outcome = run_extraction(
+
+            def run_one(source: SessionSource):
+                return run_extraction(
                     raw_extractor, source.path, artifacts,
                     source_type=source.source_type, source_id=source.source_id,
                 )
-                counts[{"no_op": "unchanged"}.get(outcome.status, outcome.status)] += 1
-                if outcome.status in {"blocked", "failed", "pending_retry"}:
-                    next_action = {
-                        "blocked": "resolve the stated reason, then use --resume if the source is unchanged; use a normal import if it changes",
-                        "failed": "correct the extractor or input problem, then use --resume if the source is unchanged",
-                        "pending_retry": "restore Cursor availability or quota, then run the same import with --resume",
-                    }[outcome.status]
-                    attention_required.append({
-                        "source_type": source.source_type,
-                        "source_id": source.source_id,
-                        "status": outcome.status,
-                        "reason": outcome.reason,
-                        "next_action": next_action,
-                    })
+            _run_batch_candidates(candidates, counts, attention_required, run_one)
             selected_embedder = embedder or FastEmbedder()
             counts["indexed"], counts["exact_duplicates"], counts["possible_duplicates"] = _index_active_records(
                 artifacts, database, selected_embedder
             )
         print(json.dumps({**counts, "attention_required": attention_required}, indent=2))
+    elif args.command == "import-url":
+        project_id = args.project_id or resolved.project_id
+        project_id = _require(project_id, "project_id")
+        project_root = args.project_root or (str(resolved.project_root) if resolved.project_root else None)
+        email = args.atlassian_email or env_value("ATLASSIAN_EMAIL", "")
+        if not email:
+            print("configuration error: --atlassian-email or MEMENTO_ATLASSIAN_EMAIL is required", file=sys.stderr)
+            return 3
+        try:
+            token = read_keychain_secret(_CONFLUENCE_KEYCHAIN_SERVICE, email)
+        except KeychainSecretError as error:
+            print(f"configuration error: {error}", file=sys.stderr)
+            return 3
+
+        url_temporary = tempfile.TemporaryDirectory()
+        sources, fetch_failures = confluence_url_sources(
+            args.urls, Path(url_temporary.name),
+            email=email, token=token, project_id=project_id,
+            project_root=Path(project_root) if project_root else None,
+            fetch=url_fetcher or fetch_confluence_page,
+        )
+        candidates, counts, attention_required = _select_batch_candidates(sources, artifacts, args.resume)
+        for failure in fetch_failures:
+            counts["failed"] += 1
+            attention_required.append({
+                "source_type": "confluence_page",
+                "source_id": failure["url"],
+                "status": "failed",
+                "reason": failure["reason"],
+                "next_action": "correct the URL or Confluence access, then retry the same import-url call",
+            })
+        if not args.dry_run:
+            try:
+                confluence_extractor = extractor or RawKnowledgeExtractor(
+                    mode=args.cursor_mode or resolved.cursor_mode,
+                    model=args.cursor_model or resolved.cursor_model,
+                    max_sanitized_chars=args.max_sanitized_chars or resolved.max_sanitized_chars,
+                    operator_id=args.operator_id or resolved.operator_id,
+                    project=ProjectProvenance(project_id=project_id, project_root=project_root),
+                    source_type="confluence_page",
+                )
+            except ValueError as error:
+                print(f"configuration error: {error}", file=sys.stderr)
+                return 3
+
+            def run_one(source: SessionSource):
+                return run_extraction(
+                    confluence_extractor, source.path, artifacts,
+                    source_type=source.source_type, source_id=source.source_id, source_uri=source.source_uri,
+                )
+            _run_batch_candidates(candidates, counts, attention_required, run_one)
+            selected_embedder = embedder or FastEmbedder()
+            counts["indexed"], counts["exact_duplicates"], counts["possible_duplicates"] = _index_active_records(
+                artifacts, database, selected_embedder
+            )
+        print(json.dumps({**counts, "attention_required": attention_required}, indent=2))
+        url_temporary.cleanup()
     elif args.command == "search":
         selected_embedder = embedder or FastEmbedder()
         results, _trace = retrieval_search(

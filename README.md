@@ -14,17 +14,19 @@ locally.
 
 - [Concept map](#concept-map)
 - [Requirements](#requirements)
-- [1. Install Memento](#1-install-memory)
-- [2. Configure Memento](#2-configure-memory)
-- [3. Put knowledge into Memento](#3-put-knowledge-into-memory)
+- [1. Install Memento](#1-install-memento)
+- [2. Configure Memento](#2-configure-memento)
+- [3. Put knowledge into Memento](#3-put-knowledge-into-memento)
   - [Import Claude sessions](#import-claude-sessions)
   - [Import Cursor conversations](#import-cursor-conversations)
   - [Understand batch-import results](#understand-batch-import-results)
   - [Recover blocked sessions](#recover-blocked-sessions)
   - [Import a curated Markdown knowledge base](#import-a-curated-markdown-knowledge-base)
+  - [Import RAW knowledge sources](#import-raw-knowledge-sources)
+  - [Import a Confluence page by URL](#import-a-confluence-page-by-url)
   - [Import one transcript manually](#import-one-transcript-manually)
 - [4. Test retrieval](#4-test-retrieval)
-- [5. Connect Memento to Claude Code](#5-connect-memory-to-claude-code)
+- [5. Connect Memento to Claude Code](#5-connect-memento-to-claude-code)
 - [Everyday command reference](#everyday-command-reference)
 - [How records are treated](#how-records-are-treated)
 - [Improve the knowledge base](#improve-the-knowledge-base)
@@ -53,7 +55,7 @@ flowchart LR
 
 The original transcript or document remains the authority. Artifacts preserve
 structured records and citations. LanceDB is a disposable index that can be
-rebuilt with `memory ingest`.
+rebuilt with `memento ingest`.
 
 ## Requirements
 
@@ -84,10 +86,10 @@ uv tool install --editable .
 Confirm installation:
 
 ```sh
-memory --help
+memento --help
 ```
 
-If your shell cannot find `memory`, add uv's tool directory to your `PATH`.
+If your shell cannot find `memento`, add uv's tool directory to your `PATH`.
 With direnv, put this in the repository's `.envrc` instead of `.zshrc`:
 
 ```sh
@@ -101,12 +103,12 @@ direnv allow
 ```
 ## 2. Configure Memento
 
-Create `~/.config/memory/config.toml`:
+Create `~/.config/memento/config.toml`:
 
 ```toml
 operator_id = "your-name"
-artifacts = "/Users/you/.local/share/memory/artifacts"
-database = "/Users/you/.local/share/memory/lancedb"
+artifacts = "/Users/you/.local/share/memento/artifacts"
+database = "/Users/you/.local/share/memento/lancedb"
 
 [extractor]
 provider = "cursor"
@@ -130,14 +132,14 @@ Git repository, this finds its root and uses the directory name as the project
 ID:
 
 ```sh
-memory config add-project
+memento config add-project
 ```
 
 Register a specific directory, or override its inferred ID:
 
 ```sh
-memory config add-project ~/src/work/lvcore
-memory config add-project ~/src/work/schedule-management-service --id schedule-service
+memento config add-project ~/src/work/lvcore
+memento config add-project ~/src/work/schedule-management-service --id schedule-service
 ```
 
 The command preserves the existing config file, refuses conflicting IDs or
@@ -146,20 +148,20 @@ roots, and reports `already_registered` when the same project is added again.
 Create the storage directories and inspect the single global configuration:
 
 ```sh
-mkdir -p ~/.local/share/memory/artifacts ~/.local/share/memory/lancedb
-memory config show
+mkdir -p ~/.local/share/memento/artifacts ~/.local/share/memento/lancedb
+memento config show
 ```
 
 `config show` lists every registered project. To see which project Memento
 resolves from the directory you are currently in, run:
 
 ```sh
-memory config current
+memento config current
 ```
 
-Configuration precedence is command option, `MEMORY_*` environment variable,
-TOML value, then built-in default. `SESSION_RAG_*` variables and the old config
-path remain fallback compatibility mechanisms.
+Configuration precedence is command option, `MEMENTO_*` environment variable,
+TOML value, then built-in default. `MEMORY_*`/`SESSION_RAG_*` variables and the
+old config paths remain fallback compatibility mechanisms.
 
 ## 3. Put knowledge into Memento
 
@@ -169,10 +171,10 @@ Extraction uses Cursor model quota. A dry run discovers candidates without
 calling the model:
 
 ```sh
-memory import-sessions --source claude --all-projects --dry-run
-memory import-sessions --source claude --project my-project --dry-run
-memory import-sessions --source claude --project current --dry-run
-memory import-sessions --source cursor --dry-run
+memento import-sessions --source claude --all-projects --dry-run
+memento import-sessions --source claude --project my-project --dry-run
+memento import-sessions --source claude --project current --dry-run
+memento import-sessions --source cursor --dry-run
 ```
 
 ### Import Claude sessions
@@ -180,15 +182,15 @@ memory import-sessions --source cursor --dry-run
 Import every transcript belonging to configured projects:
 
 ```sh
-memory import-sessions --source claude --all-projects
+memento import-sessions --source claude --all-projects
 ```
 
 Limit the import to one project or recent sessions:
 
 ```sh
-memory import-sessions --source claude --project my-project
-memory import-sessions --source claude --project current
-memory import-sessions --source claude --project my-project --since 2026-09-01
+memento import-sessions --source claude --project my-project
+memento import-sessions --source claude --project current
+memento import-sessions --source claude --project my-project --since 2026-09-01
 ```
 
 Claude imports always require an explicit project scope. `--project current`
@@ -199,7 +201,7 @@ Claude project.
 To retry recorded extraction failures without retrying everything:
 
 ```sh
-memory import-sessions --source claude --project my-project --resume
+memento import-sessions --source claude --project my-project --resume
 ```
 
 If a failed transcript changed afterward, Memento reports
@@ -210,7 +212,7 @@ For the newest Claude session in the project you are currently inside:
 
 ```sh
 cd /Users/you/src/work/my-project
-memory capture --latest
+memento capture --latest
 ```
 
 This extracts the session and rebuilds the index in one operation.
@@ -218,8 +220,8 @@ This extracts the session and rebuilds the index in one operation.
 ### Import Cursor conversations
 
 ```sh
-memory import-sessions --source cursor --dry-run
-memory import-sessions --source cursor
+memento import-sessions --source cursor --dry-run
+memento import-sessions --source cursor
 ```
 
 Memento reads a temporary, read-only snapshot of Cursor's local conversation
@@ -296,7 +298,7 @@ possible semantic duplicates.
 A dry run stops before extraction and indexing. It therefore reports discovery
 and eligibility but does not produce new activations or index statistics.
 
-Older versions accepted `memory import-sessions --source all`; output from that
+Older versions accepted `memento import-sessions --source all`; output from that
 command combined configured-project Claude sessions with global, unscoped
 Cursor conversations. Use separate Claude and Cursor imports in current
 versions so each summary has one clear scope.
@@ -314,11 +316,11 @@ For a session exceeding `extractor.max_sanitized_chars`:
 1. Decide whether the source is worth the additional extraction context and
    Cursor quota. Do not raise the limit automatically.
 2. Increase `extractor.max_sanitized_chars` in
-   `~/.config/memory/config.toml` enough to accommodate that sanitized session.
+   `~/.config/memento/config.toml` enough to accommodate that sanitized session.
 3. Retry the unchanged blocked revision:
 
    ```sh
-   memory import-sessions --source claude --project current --resume
+   memento import-sessions --source claude --project current --resume
    ```
 
 4. Confirm that the new summary reports the source under `activated`, with no
@@ -329,7 +331,7 @@ If you edit or regenerate the source after it was blocked, `--resume` reports
 import without `--resume` to treat that content as a new revision:
 
 ```sh
-memory import-sessions --source claude --project current
+memento import-sessions --source claude --project current
 ```
 
 For `pending_retry`, restore Cursor authentication, availability, or quota and
@@ -341,27 +343,91 @@ continue to report it until it succeeds or the source is removed.
 ### Import a curated Markdown knowledge base
 
 ```sh
-memory import-markdown-kb /path/to/Wiki \
+memento import-markdown-kb /path/to/Wiki \
   --knowledge-base-id team-wiki \
   --project-id my-project \
   --temporal-scope durable
 
-memory ingest
+memento ingest
 ```
 
 Markdown import is deterministic and does not spend Cursor model quota.
 
+### Import RAW knowledge sources
+
+```sh
+memento import-raw-sources /path/to/RAW \
+  --knowledge-base-id team-notes \
+  --project-id my-project \
+  --dry-run
+
+memento import-raw-sources /path/to/RAW \
+  --knowledge-base-id team-notes \
+  --project-id my-project
+
+memento ingest
+```
+
+Unlike Markdown import, this reads free-form `.md`/`.txt` notes, HLDs, decision
+records, and other reference documents that aren't already structured
+Wiki-style knowledge, and sends each one to the Cursor extraction model to
+pull out discrete, evidence-cited records. It spends Cursor quota, but only
+for genuinely new or changed files — unchanged sources are skipped by content
+hash before any call is made. Files whose name starts with `_` (a manifest or
+template, not a knowledge source) are skipped.
+
+It shares `import-sessions`' batch shape: `--dry-run` to preview, `--resume`
+to retry only previously failed/blocked documents, and the same JSON summary
+described above under "Understand batch-import results".
+
+### Import a Confluence page by URL
+
+One-time setup: generate a classic (unscoped) Atlassian API token at
+https://id.atlassian.com/manage-profile/security/api-tokens, then store it in
+the macOS Keychain yourself — Memento never accepts the raw token as a
+command argument or config value:
+
+```sh
+security add-generic-password -a you@yourcompany.com -s memento-atlassian-api-token -w 'PASTE_TOKEN_HERE'
+```
+
+Then import by URL — no manual export/conversion step, no `--knowledge-base-id`:
+
+```sh
+memento import-url \
+  https://yourcompany.atlassian.net/wiki/spaces/SD/pages/123/One+Page \
+  https://yourcompany.atlassian.net/wiki/spaces/SD/pages/456/Another+Page \
+  --atlassian-email you@yourcompany.com \
+  --project-id observability \
+  --dry-run
+
+memento import-url ... --atlassian-email you@yourcompany.com --project-id observability
+
+memento ingest
+```
+
+`--atlassian-email` can also be set once via `MEMENTO_ATLASSIAN_EMAIL` — it's
+both the Basic Auth identity for Confluence's REST API and the Keychain
+account name Memento looks the token up under. Each URL is fetched fresh on
+every run (a cheap REST call) and only spends Cursor quota when the page's
+content actually changed since the last import. A URL that fails to parse or
+fetch (wrong domain, deleted page, bad token) is skipped and reported in
+`attention_required` rather than failing the whole batch.
+
+v1 supports Confluence Cloud page URLs only — not Jira tickets, Google Docs,
+or arbitrary web articles.
+
 ### Import one transcript manually
 
 ```sh
-memory extract-session /absolute/path/to/session.jsonl \
+memento extract-session /absolute/path/to/session.jsonl \
   --project-id my-project \
   --project-root /Users/you/src/work/my-project
 
-memory ingest
+memento ingest
 ```
 
-`extract-session` creates and activates an artifact; `memory ingest` rebuilds
+`extract-session` creates and activates an artifact; `memento ingest` rebuilds
 LanceDB from all active artifacts.
 
 ## 4. Test retrieval
@@ -369,13 +435,13 @@ LanceDB from all active artifacts.
 Project-scoped search:
 
 ```sh
-memory search "Where are the application logs?" --project-id my-project
+memento search "Where are the application logs?" --project-id my-project
 ```
 
 Global search, including unscoped Cursor records:
 
 ```sh
-memory search "How did we fix the deployment?" --global-scope
+memento search "How did we fix the deployment?" --global-scope
 ```
 
 A weak match returns `No relevant session memory found.` Memento combines
@@ -388,7 +454,7 @@ The repository includes the fail-open hook wrapper at
 `scripts/claude-user-prompt-submit`. Make it executable:
 
 ```sh
-chmod +x /absolute/path/to/memory/scripts/claude-user-prompt-submit
+chmod +x /absolute/path/to/memento/scripts/claude-user-prompt-submit
 ```
 
 Add this to the target project's `.claude/settings.local.json`, merging it with
@@ -402,7 +468,7 @@ any existing settings:
         "hooks": [
           {
             "type": "command",
-            "command": "/absolute/path/to/memory/scripts/claude-user-prompt-submit",
+            "command": "/absolute/path/to/memento/scripts/claude-user-prompt-submit",
             "args": ["--project-id", "my-project"],
             "statusMessage": "Searching project memory..."
           }
@@ -427,29 +493,32 @@ unscoped Cursor conversations.
 
 | Goal | Command |
 | --- | --- |
-| Show the global configuration and all projects | `memory config show` |
-| Show the project resolved for this directory | `memory config current` |
-| Register the current project | `memory config add-project` |
-| Register another project | `memory config add-project PATH [--id ID]` |
-| Preview all configured Claude sessions | `memory import-sessions --source claude --all-projects --dry-run` |
-| Import one project's Claude sessions | `memory import-sessions --source claude --project ID` |
-| Import the current project's Claude sessions | `memory import-sessions --source claude --project current` |
-| Capture the current project's newest session | `memory capture --latest` |
-| Preview/import Cursor | `memory import-sessions --source cursor --dry-run` / remove `--dry-run` |
-| Retry unchanged failed revisions | `memory import-sessions --source claude --project ID --resume` |
-| Rebuild the derived index | `memory ingest` |
-| Search one project | `memory search "question" --project-id ID` |
-| Search everything | `memory search "question" --global-scope` |
-| Inspect a record and its status | `memory history RECORD_ID` |
-| Review duplicate candidates | `memory duplicates --project-id ID` |
-| Run a local knowledge audit | `memory health-check --project-id ID` |
-| Add Cursor contradiction/gap analysis | `memory health-check --project-id ID --ai` |
-| Mark a record trustworthy | `memory verify RECORD_ID` |
-| Remove a bad record from retrieval | `memory reject RECORD_ID` |
-| Replace an old record | `memory supersede OLD_RECORD_ID NEW_RECORD_ID` |
-| Erase one source and its index rows | `memory forget SOURCE_ID` |
-| Erase a project's sources | `memory forget --project ID` |
-| Show help for any operation | `memory COMMAND --help` |
+| Show the global configuration and all projects | `memento config show` |
+| Show the project resolved for this directory | `memento config current` |
+| Register the current project | `memento config add-project` |
+| Register another project | `memento config add-project PATH [--id ID]` |
+| Preview all configured Claude sessions | `memento import-sessions --source claude --all-projects --dry-run` |
+| Import one project's Claude sessions | `memento import-sessions --source claude --project ID` |
+| Import the current project's Claude sessions | `memento import-sessions --source claude --project current` |
+| Capture the current project's newest session | `memento capture --latest` |
+| Preview/import Cursor | `memento import-sessions --source cursor --dry-run` / remove `--dry-run` |
+| Retry unchanged failed revisions | `memento import-sessions --source claude --project ID --resume` |
+| Import a Markdown knowledge base | `memento import-markdown-kb PATH --knowledge-base-id ID --project-id ID --temporal-scope durable` |
+| Preview/import RAW knowledge sources | `memento import-raw-sources PATH --knowledge-base-id ID --project-id ID --dry-run` / remove `--dry-run` |
+| Import Confluence pages by URL | `memento import-url URL [URL ...] --atlassian-email YOU --project-id ID` |
+| Rebuild the derived index | `memento ingest` |
+| Search one project | `memento search "question" --project-id ID` |
+| Search everything | `memento search "question" --global-scope` |
+| Inspect a record and its status | `memento history RECORD_ID` |
+| Review duplicate candidates | `memento duplicates --project-id ID` |
+| Run a local knowledge audit | `memento health-check --project-id ID` |
+| Add Cursor contradiction/gap analysis | `memento health-check --project-id ID --ai` |
+| Mark a record trustworthy | `memento verify RECORD_ID` |
+| Remove a bad record from retrieval | `memento reject RECORD_ID` |
+| Replace an old record | `memento supersede OLD_RECORD_ID NEW_RECORD_ID` |
+| Erase one source and its index rows | `memento forget SOURCE_ID` |
+| Erase a project's sources | `memento forget --project ID` |
+| Show help for any operation | `memento COMMAND --help` |
 
 Record IDs live in the immutable artifact JSON files under the configured
 artifact directory. Search citations identify the source type, source ID,
@@ -461,7 +530,7 @@ source hash, and evidence location needed to trace a result back to its source.
 - Exact normalized duplicates receive a `duplicate_of` link and are omitted
   from the index; their immutable source evidence is retained.
 - Probable semantic duplicates remain searchable and receive scored
-  `reinforces` links for review with `memory duplicates`.
+  `reinforces` links for review with `memento duplicates`.
 - `verified` records receive a ranking boost.
 - `rejected` and `superseded` records remain in history but leave retrieval.
 - Durable verified knowledge resists time decay; time-sensitive observations
@@ -474,7 +543,7 @@ source hash, and evidence location needed to trace a result back to its source.
 Run the fully local audit whenever you want a maintenance report:
 
 ```sh
-memory health-check --project-id my-project
+memento health-check --project-id my-project
 ```
 
 It reports possible duplicates or contradictions, stale time-sensitive records, missing evidence
@@ -486,7 +555,7 @@ For contradiction, coverage-gap, and suggested-article analysis, explicitly
 authorize one Cursor synthesis call:
 
 ```sh
-memory health-check --project-id my-project --ai
+memento health-check --project-id my-project --ai
 ```
 
 This sends structured, previously sanitized Episode Record content to the
@@ -497,14 +566,14 @@ or `supersede` yourself; no recommendation is applied automatically.
 
 ## Troubleshooting
 
-**`memory: command not found`**
+**`memento: command not found`**
 
 Ensure `~/.local/bin` is on `PATH`, then rerun `uv tool install --editable .`.
 
 **No Claude sessions are discovered**
 
 Confirm the project `root` exactly matches the path used when Claude Code ran.
-Use `memory config show` to inspect all registered roots and `memory config
+Use `memento config show` to inspect all registered roots and `memento config
 current` from inside the project to confirm that it resolves correctly.
 
 **Extraction is blocked because the session is too large**
@@ -519,7 +588,7 @@ The session is marked `pending_retry`; authenticate or wait for quota, then use
 
 **Search finds nothing after a manual extraction**
 
-Run `memory ingest`. Batch imports and `capture --latest` rebuild the index
+Run `memento ingest`. Batch imports and `capture --latest` rebuild the index
 automatically; `extract-session` and Markdown import do not.
 
 **Cursor memories do not appear in a project search**
