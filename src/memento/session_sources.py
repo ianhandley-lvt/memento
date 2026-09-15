@@ -9,6 +9,8 @@ from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
+from .confluence import ConfluenceFetchError, ConfluenceURLError, confluence_source_id, fetch_confluence_page, parse_confluence_url
+
 
 @dataclass(frozen=True)
 class SessionSource:
@@ -60,6 +62,43 @@ def cursor_sessions(database: Path, output_dir: Path) -> list[SessionSource]:
             timestamp /= 1000
         result.append(SessionSource("cursor_session", identifier, path, source_uri=f"cursor://conversation/{identifier}", updated_at=timestamp))
     return result
+
+
+def confluence_url_sources(
+    urls: list[str],
+    output_dir: Path,
+    *,
+    email: str,
+    token: str,
+    project_id: str | None,
+    project_root: Path | None,
+    fetch=fetch_confluence_page,
+) -> tuple[list[SessionSource], list[dict]]:
+    """Fetch each URL fresh (one cheap REST call) and cache its converted
+    text locally so `source_hash` can detect real content changes across
+    runs — mirrors `cursor_sessions`' fresh-snapshot-then-hash approach
+    rather than a separately-invalidated on-disk cache.
+
+    A URL that fails to parse or fetch is skipped, not fatal to the batch;
+    the second return value lists what failed and why so the caller can
+    surface it the same way a blocked/failed extraction is surfaced.
+    """
+
+    output_dir.mkdir(parents=True, exist_ok=True)
+    sources: list[SessionSource] = []
+    fetch_failures: list[dict] = []
+    for url in urls:
+        try:
+            base_url, page_id = parse_confluence_url(url)
+            page = fetch(base_url, page_id, email=email, token=token)
+        except (ConfluenceURLError, ConfluenceFetchError) as error:
+            fetch_failures.append({"url": url, "reason": str(error)})
+            continue
+        source_id = confluence_source_id(base_url, page_id)
+        path = output_dir / f"{source_id}.md"
+        path.write_text(f"# {page.title}\n\n{page.text}\n")
+        sources.append(SessionSource("confluence_page", source_id, path, project_id, project_root, source_uri=page.url))
+    return sources, fetch_failures
 
 
 def parse_since(value: str | None) -> float | None:

@@ -109,6 +109,7 @@ class RawKnowledgeExtractor:
         max_output_retries: int | None = None,
         source_id: str | None = None,
         source_uri: str | None = None,
+        source_type: str = "raw_knowledge_source",
     ) -> None:
         self._executable = executable
         self._runner = runner
@@ -140,6 +141,7 @@ class RawKnowledgeExtractor:
         )
         self._source_id = source_id
         self._source_uri = source_uri
+        self._source_type = source_type
 
     @property
     def model(self) -> str:
@@ -173,7 +175,7 @@ class RawKnowledgeExtractor:
                     },
                     source=self._source_uri or str(document.resolve()),
                     source_session_id=self._source_id or document.stem,
-                    source_type="raw_knowledge_source",
+                    source_type=self._source_type,
                     operator_id=self._operator_id,
                     project=self._project,
                     prompt_version=self._prompt_version,

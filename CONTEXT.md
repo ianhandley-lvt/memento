@@ -13,7 +13,7 @@ The validated, schema-checked, provenance-attached persisted representation of o
 _Avoid_: Episode (when the persisted/validated artifact specifically is meant, not the underlying real-world unit), record (ambiguous alone)
 
 **Source Type**:
-Immutable provenance category of an Episode Record's origin — `claude_session`, `markdown_knowledge_base`, `adr`, `notion_page`, `external_doc`, etc. Set once at extraction time from the source adapter, never changes for a given record.
+Immutable provenance category of an Episode Record's origin — `claude_session`, `markdown_knowledge_base`, `raw_knowledge_source`, `confluence_page`, `adr`, `notion_page`, `external_doc`, etc. Set once at extraction time from the source adapter, never changes for a given record.
 _Avoid_: Authority (source type says where evidence came from, not how much to trust it)
 
 **Markdown Knowledge Base**:
