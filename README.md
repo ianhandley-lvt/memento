@@ -406,6 +406,11 @@ memento import-url ... --atlassian-email you@yourcompany.com --project-id observ
 memento ingest
 ```
 
+Both canonical page URLs (`/wiki/spaces/KEY/pages/123/Title`) and the tiny
+`/wiki/x/<code>` links Confluence's own "Copy link" button gives you are
+accepted — the tiny form is resolved to its canonical URL via an
+authenticated request before import.
+
 `--atlassian-email` can also be set once via `MEMENTO_ATLASSIAN_EMAIL` — it's
 both the Basic Auth identity for Confluence's REST API and the Keychain
 account name Memento looks the token up under. Each URL is fetched fresh on
