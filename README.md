@@ -494,6 +494,37 @@ Use `--global-scope` instead of the project arguments only if that Claude
 workspace should be allowed to retrieve records from every project and
 unscoped Cursor conversations.
 
+## 6. Automate nightly sync
+
+`scripts/nightly-sync.sh` pulls new Claude and Cursor sessions across all
+projects, plus any Confluence pages you list, into the shared artifact store
+and index. It's idempotent (dedup by content hash), so a re-run over
+unchanged content costs nothing.
+
+List Confluence pages to sync in `~/.config/memento/confluence-urls.txt`,
+one per line: `PROJECT_ID URL`. Blank lines and `#`-prefixed lines are
+ignored, and URLs are grouped by project so each project gets a single
+`import-url` call.
+
+```
+# format: PROJECT_ID URL
+my-project https://your-org.atlassian.net/wiki/spaces/X/pages/123/Some+Page
+```
+
+Run it directly, or schedule it (cron or launchd) to run nightly:
+
+```sh
+chmod +x /absolute/path/to/memento/scripts/nightly-sync.sh
+/absolute/path/to/memento/scripts/nightly-sync.sh
+```
+
+Set `MEMENTO_ATLASSIAN_EMAIL` before running if any listed pages need
+Confluence auth. Each run appends to
+`~/.local/share/memento/logs/nightly-sync-YYYY-MM-DD.log`. On macOS, a
+blocked/failed source or a source stuck `pending_retry`/`blocked` for 48h+
+also raises a local notification pointing at that log — nothing is ever
+posted or sent anywhere on your behalf.
+
 ## Everyday command reference
 
 | Goal | Command |
