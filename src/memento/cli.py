@@ -32,6 +32,7 @@ from .overlay import (
     verify,
 )
 from .pipeline import run_extraction
+from .report import generate_report, never_retrieved, render_report
 from .retrieval import RetrievalScope
 from .retrieval import purge_traces
 from .retrieval import search as retrieval_search
@@ -232,6 +233,10 @@ def parser() -> argparse.ArgumentParser:
     batch.add_argument("--since", help="Only sessions updated on/after YYYY-MM-DD")
     batch.add_argument("--resume", action="store_true", help="Retry only previously failed or blocked sessions")
     batch.add_argument("--cursor-database", type=Path)
+    report_cmd = commands.add_parser("report")
+    report_cmd.add_argument("--artifacts", type=Path)
+    report_cmd.add_argument("--json", action="store_true")
+    report_cmd.add_argument("--never-retrieved-days", type=int, default=14)
     config_cmd = commands.add_parser("config")
     config_commands = config_cmd.add_subparsers(dest="config_command", required=True)
     config_commands.add_parser("show")
@@ -888,6 +893,11 @@ def run(
             print(f"error: {error}", file=sys.stderr)
             return 1
         print(f"{verb} {args.record_id}")
+    elif args.command == "report":
+        data = generate_report(artifacts)
+        if args.never_retrieved_days != 14:
+            data["never_retrieved"] = never_retrieved(artifacts, min_age_days=args.never_retrieved_days)
+        print(json.dumps(data, indent=2) if args.json else render_report(data))
     elif args.command == "forget":
         if bool(args.source_id) == bool(args.project):
             print("forget requires exactly one of <source-id> or --project", file=sys.stderr)

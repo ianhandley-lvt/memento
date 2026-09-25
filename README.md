@@ -27,6 +27,8 @@ locally.
   - [Import one transcript manually](#import-one-transcript-manually)
 - [4. Test retrieval](#4-test-retrieval)
 - [5. Connect Memento to Claude Code](#5-connect-memento-to-claude-code)
+- [6. Automate nightly sync](#6-automate-nightly-sync)
+- [7. Check whether it's helping](#7-check-whether-its-helping)
 - [Everyday command reference](#everyday-command-reference)
 - [How records are treated](#how-records-are-treated)
 - [Improve the knowledge base](#improve-the-knowledge-base)
@@ -525,6 +527,30 @@ blocked/failed source or a source stuck `pending_retry`/`blocked` for 48h+
 also raises a local notification pointing at that log — nothing is ever
 posted or sent anywhere on your behalf.
 
+## 7. Check whether it's helping
+
+`memento report` reads the logs Memento already writes (hook metrics,
+retrieval traces, nightly-sync history, verification overlay) and prints a
+lifetime/30-day/7-day summary: how often the retrieval hook fires and finds
+something, which projects and topics its hits actually come from, how much
+new content nightly-sync.sh is picking up per source, the verified/rejected
+ratio, and any active record old enough to have been useful but never once
+returned by a search. Pass `--json` for machine-readable output.
+
+```sh
+memento report
+```
+
+None of it reads prompt or query text; the underlying logs never store that
+(see `hook.py`'s `_record_metric` and `retrieval.py`'s `persisted_trace`).
+
+If you're upgrading and already have `nightly-sync.sh` logs from before this
+command existed, backfill their yield into the report once:
+
+```sh
+python3 scripts/backfill-sync-history.py "$(memento config show | python3 -c "import json,sys; print(json.load(sys.stdin)['artifacts'])")"
+```
+
 ## Everyday command reference
 
 | Goal | Command |
@@ -548,6 +574,7 @@ posted or sent anywhere on your behalf.
 | Inspect a record and its status | `memento history RECORD_ID` |
 | Review duplicate candidates | `memento duplicates --project-id ID` |
 | Run a local knowledge audit | `memento health-check --project-id ID` |
+| Check retrieval usage, sync yield, top topics | `memento report` |
 | Add Cursor contradiction/gap analysis | `memento health-check --project-id ID --ai` |
 | Mark a record trustworthy | `memento verify RECORD_ID` |
 | Remove a bad record from retrieval | `memento reject RECORD_ID` |
