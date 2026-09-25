@@ -32,6 +32,11 @@ LOG_FILE="$LOG_DIR/nightly-sync-$(date +%Y-%m-%d).log"
 CONFLUENCE_URLS_FILE="$HOME/.config/memento/confluence-urls.txt"
 mkdir -p "$LOG_DIR"
 
+# Resolved once so log_sync_run doesn't re-invoke `memento config show` per
+# step. Empty if config resolution fails; log_sync_run then no-ops rather
+# than write anywhere unexpected.
+ARTIFACTS_ROOT=$("$MEMENTO" config show 2>/dev/null | python3 -c "import json,sys; print(json.load(sys.stdin).get('artifacts') or '')" 2>/dev/null)
+
 log() {
   printf '%s %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$1" >> "$LOG_FILE"
 }
@@ -52,6 +57,37 @@ notify() {
   osascript -e "display notification \"$1\" with title \"Memento nightly sync\"" >/dev/null 2>&1 || true
 }
 
+# Appends one structured entry per run_step call to sync_history.jsonl in the
+# artifact store, for `memento report`'s nightly-sync-yield section. Best
+# effort: a non-JSON blob (e.g. a dry run's human-readable output) or a
+# missing ARTIFACTS_ROOT just skips the append, never fails the sync.
+log_sync_run() {
+  label="$1"
+  blob="$2"
+  [ -n "$ARTIFACTS_ROOT" ] || return 0
+  printf '%s' "$blob" | python3 -c "
+import json, sys
+from datetime import datetime, timezone
+
+label, path = sys.argv[1], sys.argv[2]
+try:
+    data = json.load(sys.stdin)
+except Exception:
+    sys.exit(0)
+entry = {
+    'label': label,
+    'logged_at': datetime.now(timezone.utc).isoformat(),
+    'discovered': data.get('discovered', 0),
+    'activated': data.get('activated', 0),
+    'blocked': data.get('blocked', 0),
+    'failed': data.get('failed', 0),
+    'pending_retry': data.get('pending_retry', 0),
+}
+with open(path, 'a') as handle:
+    handle.write(json.dumps(entry) + '\n')
+" "$label" "$ARTIFACTS_ROOT/sync_history.jsonl" 2>/dev/null || true
+}
+
 # Appends to $problems (global) if a batch-import JSON blob reports any
 # blocked/failed source. Each blob is multi-line (indented JSON), so this is
 # called once per blob directly rather than folded into a `for` loop over
@@ -67,7 +103,9 @@ count_problems() {
 log "=== nightly sync starting ==="
 
 sessions_claude=$(run_step "import Claude sessions (all projects)" "$MEMENTO" import-sessions --source claude --all-projects)
+log_sync_run "claude_sessions" "$sessions_claude"
 sessions_cursor=$(run_step "import Cursor conversations" "$MEMENTO" import-sessions --source cursor)
+log_sync_run "cursor_sessions" "$sessions_cursor"
 
 # Surface anything that needs a human: real failures immediately, and
 # pending_retry only once it's stale (younger than 48h self-heals on its own
@@ -86,6 +124,7 @@ if [ -f "$CONFLUENCE_URLS_FILE" ]; then
   for project_id in $projects; do
     urls=$(awk -v p="$project_id" 'NF && $1 !~ /^#/ && $1 == p {print $2}' "$CONFLUENCE_URLS_FILE")
     confluence_output=$(run_step "import Confluence pages ($project_id)" "$MEMENTO" import-url $urls --project-id "$project_id")
+    log_sync_run "confluence:$project_id" "$confluence_output"
     count_problems "$confluence_output"
   done
 fi
