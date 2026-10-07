@@ -115,6 +115,15 @@ problems=""
 count_problems "$sessions_claude"
 count_problems "$sessions_cursor"
 
+# pending_retry alone looks self-healing, but a permanently broken extractor
+# (e.g. the configured model removed from cursor-agent, 2026-09-30) also lands
+# there and retries forever. Any "Cursor unavailable" reason means extraction
+# itself is failing, so say so the first night rather than after 48h.
+cursor_unavailable=$(printf '%s\n%s' "$sessions_claude" "$sessions_cursor" | grep -c 'Cursor unavailable' || true)
+if [ "${cursor_unavailable:-0}" != "0" ]; then
+  problems="${problems}Cursor extraction failing for ${cursor_unavailable} source(s) (check extractor model/quota); "
+fi
+
 # Confluence pages: format is "PROJECT_ID URL", one per line, "#"-prefixed
 # lines and blank lines ignored. Grouped by project_id so each project gets
 # one import-url call (one index rebuild) instead of one per URL. Add/remove
