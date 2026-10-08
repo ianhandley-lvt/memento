@@ -1,6 +1,6 @@
 # Memento v1 Design Decisions
 
-**Status:** Implemented. v1 acceptance criteria are complete — see closed [issue #1](https://github.com/ianhandley-lvt/memento/issues/1) and merged PR #19.<br>
+**Status:** Implemented. v1 acceptance criteria are complete — see closed [issue #1](https://github.com/ihandley/memento/issues/1) and merged PR #19.<br>
 **Decided:** 2026-09-01 · **Implemented:** 2026-09-02<br>
 **Scope:** Local Claude Code session and curated Markdown knowledge for one operator on one Mac
 
