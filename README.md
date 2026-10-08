@@ -80,7 +80,7 @@ claude --version
 Clone the repository, enter it, and install the command as an editable uv tool:
 
 ```sh
-git clone https://github.com/ianhandley-lvt/memento.git
+git clone https://github.com/ihandley/memento.git
 cd memento
 uv tool install --editable .
 ```
