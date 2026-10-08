@@ -1,5 +1,8 @@
 <p align="center">
-  <img src="docs/assets/logo.png" alt="Memento" width="120">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/logo-white.png">
+    <img src="docs/assets/logo-black.png" alt="Memento" width="120">
+  </picture>
 </p>
 
 # Memento
