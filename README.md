@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="docs/assets/logo.png" alt="Memento" width="120">
+</p>
+
 # Memento
 
 Memento is a local, evidence-backed knowledge system for AI-assisted work. It
